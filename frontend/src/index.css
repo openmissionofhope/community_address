@@ -1,0 +1,280 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Leaflet overrides for mobile */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+}
+
+.leaflet-control-zoom {
+  border: none !important;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
+}
+
+/* Address popup styles */
+.address-popup {
+  min-width: 200px;
+}
+
+.address-popup h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #374151;
+}
+
+.address-popup .address-full {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.address-popup .address-type {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.address-popup .address-type.official {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.address-popup .address-type.community {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.address-popup .actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.address-popup .actions button {
+  flex: 1;
+  min-width: 80px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.address-popup .actions .copy-btn {
+  background: #2563eb;
+  color: white;
+}
+
+.address-popup .actions .copy-btn:hover {
+  background: #1d4ed8;
+}
+
+.address-popup .actions .share-btn {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.address-popup .actions .share-btn:hover {
+  background: #e5e7eb;
+}
+
+.address-popup .actions .suggest-btn {
+  background: #fef3c7;
+  color: #92400e;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.address-popup .actions .suggest-btn:hover {
+  background: #fde68a;
+}
+
+/* Header */
+.app-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  z-index: 1000;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.app-header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.app-header .disclaimer {
+  margin-left: auto;
+  font-size: 11px;
+  color: #6b7280;
+  max-width: 200px;
+  text-align: right;
+}
+
+/* Map container offset for header */
+.map-container {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* Suggestion modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 16px;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  max-width: 400px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.modal h2 {
+  font-size: 18px;
+  margin-bottom: 16px;
+  color: #111827;
+}
+
+.modal .form-group {
+  margin-bottom: 16px;
+}
+
+.modal label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.modal select,
+.modal textarea,
+.modal input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.modal textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.modal .button-group {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.modal button {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.modal .cancel-btn {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.modal .submit-btn {
+  background: #2563eb;
+  color: white;
+}
+
+/* Loading state */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1500;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Toast notifications */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #111827;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 3000;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
