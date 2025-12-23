@@ -55,7 +55,7 @@ INSERT INTO buildings (osm_id, osm_type, geometry, addr_housenumber, addr_street
 SELECT
     osm_id,
     'way' as osm_type,
-    way as geometry,
+    ST_Multi(ST_Transform(way, 4326)) as geometry,
     "addr:housenumber",
     "addr:street",
     "addr:city",
@@ -76,7 +76,7 @@ INSERT INTO streets (osm_id, osm_type, geometry, name, highway_type)
 SELECT
     osm_id,
     'way' as osm_type,
-    way as geometry,
+    ST_Transform(way, 4326) as geometry,
     name,
     highway as highway_type
 FROM planet_osm_line

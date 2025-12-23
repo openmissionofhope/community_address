@@ -13,16 +13,14 @@ CREATE TABLE buildings (
     id              BIGSERIAL PRIMARY KEY,
     osm_id          BIGINT NOT NULL UNIQUE,
     osm_type        VARCHAR(10) NOT NULL CHECK (osm_type IN ('node', 'way', 'relation')),
-    geometry        GEOMETRY(POLYGON, 4326) NOT NULL,
+    geometry        GEOMETRY(MULTIPOLYGON, 4326) NOT NULL,
     centroid        GEOMETRY(POINT, 4326) GENERATED ALWAYS AS (ST_Centroid(geometry)) STORED,
 
-    -- Official address from OSM (nullable = no official address)
     addr_housenumber VARCHAR(50),
     addr_street      VARCHAR(255),
     addr_city        VARCHAR(255),
     addr_postcode    VARCHAR(50),
 
-    -- Metadata
     osm_tags         JSONB,
     imported_at      TIMESTAMPTZ DEFAULT NOW(),
     osm_timestamp    TIMESTAMPTZ
