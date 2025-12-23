@@ -16,7 +16,11 @@ fi
 OSM_FILE=$1
 DB_NAME=${DB_NAME:-community_address}
 DB_HOST=${DB_HOST:-localhost}
+DB_PORT=${DB_PORT:-5432}
 DB_USER=${DB_USER:-postgres}
+DB_PASSWORD=${DB_PASSWORD:-postgres}
+
+export PGPASSWORD="$DB_PASSWORD"
 
 echo "==> Importing buildings from $OSM_FILE"
 
@@ -37,6 +41,7 @@ osm2pgsql \
     --slim \
     --database "$DB_NAME" \
     --host "$DB_HOST" \
+    --port "$DB_PORT" \
     --username "$DB_USER" \
     --style /tmp/community_address.style \
     --multi-geometry \
@@ -44,7 +49,7 @@ osm2pgsql \
 
 echo "==> Extracting buildings into our schema"
 
-psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" << 'SQL'
+psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" << 'SQL'
 -- Insert buildings from osm2pgsql output
 INSERT INTO buildings (osm_id, osm_type, geometry, addr_housenumber, addr_street, addr_city, addr_postcode, osm_tags)
 SELECT

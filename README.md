@@ -20,6 +20,24 @@ All addresses are explicitly temporary, reversible, and non-authoritative. OSM r
 - Docker and Docker Compose
 - Node.js 20+ (for local development)
 - PostgreSQL 15+ with PostGIS (or use Docker)
+- osm2pgsql (for importing OSM data)
+
+#### Installing osm2pgsql
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get install osm2pgsql
+```
+
+**macOS (Homebrew):**
+```bash
+brew install osm2pgsql
+```
+
+**Fedora/RHEL:**
+```bash
+sudo dnf install osm2pgsql
+```
 
 ### Running with Docker
 
