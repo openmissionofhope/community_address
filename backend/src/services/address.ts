@@ -1,16 +1,44 @@
+/**
+ * @fileoverview Address assignment service for Community Address system.
+ * Implements the algorithm for generating community addresses for buildings
+ * that lack official addresses in OpenStreetMap data. Uses a deterministic
+ * approach based on geographic location to ensure consistent address assignment.
+ */
+
 import crypto from 'crypto';
 import { query, queryOne } from '../db/connection.js';
 
+/** Spacing between consecutive house numbers on a street */
 const HOUSE_NUMBER_SPACING = 10;
+
+/** Maximum distance in meters to associate a building with a named street */
 const MAX_STREET_DISTANCE_METERS = 100;
-const GRID_SIZE = 0.002; // ~200m at equator
+
+/** Grid cell size in degrees for placeholder street generation (~200m at equator) */
+const GRID_SIZE = 0.002;
+
+/** Current version of the address assignment algorithm */
 const ALGORITHM_VERSION = 'v1.0';
 
+/**
+ * Represents a geographic coordinate point.
+ * @interface Coordinate
+ * @property {number} lon - Longitude in degrees (-180 to 180)
+ * @property {number} lat - Latitude in degrees (-90 to 90)
+ */
 interface Coordinate {
   lon: number;
   lat: number;
 }
 
+/**
+ * Represents a street from OpenStreetMap data.
+ * @interface Street
+ * @property {number} osm_id - OpenStreetMap unique identifier
+ * @property {string} name - Street name
+ * @property {string} geometry - GeoJSON representation of the street geometry
+ * @property {number} distance_m - Distance from the query point in meters
+ */
 interface Street {
   osm_id: number;
   name: string;
@@ -18,12 +46,29 @@ interface Street {
   distance_m: number;
 }
 
+/**
+ * Represents a placeholder street for areas without named OSM streets.
+ * @interface PlaceholderStreet
+ * @property {string} placeholder_id - Unique identifier based on grid cell
+ * @property {string} display_name - Human-readable name for the placeholder
+ * @property {string} geometry - GeoJSON representation of the placeholder geometry
+ */
 interface PlaceholderStreet {
   placeholder_id: string;
   display_name: string;
   geometry: string;
 }
 
+/**
+ * Represents a generated community address for a building.
+ * @interface CommunityAddress
+ * @property {number} house_number - The assigned house number
+ * @property {string} street_name - Name of the associated street
+ * @property {'osm' | 'placeholder'} street_source - Whether the street came from OSM or was generated
+ * @property {string} street_id - Unique identifier for the street
+ * @property {string} full_address - Complete formatted address string
+ * @property {string} algorithm_version - Version of the algorithm used to generate the address
+ */
 export interface CommunityAddress {
   house_number: number;
   street_name: string;
@@ -33,6 +78,22 @@ export interface CommunityAddress {
   algorithm_version: string;
 }
 
+/**
+ * Represents a building with its address information.
+ * @interface BuildingAddress
+ * @property {number} osm_id - OpenStreetMap unique identifier
+ * @property {string} osm_type - Type of OSM element (node, way, or relation)
+ * @property {'official' | 'community'} address_type - Whether the address is from OSM or community-generated
+ * @property {object} address - The address details
+ * @property {string|number} address.house_number - House or building number
+ * @property {string} address.street - Street name
+ * @property {string} [address.city] - City name (optional)
+ * @property {string} [address.postcode] - Postal code (optional)
+ * @property {string} address.full - Full formatted address string
+ * @property {'osm' | 'placeholder'} address.source - Source of the street name
+ * @property {string} [address.algorithm_version] - Algorithm version for community addresses
+ * @property {unknown} geometry - GeoJSON geometry of the building
+ */
 export interface BuildingAddress {
   osm_id: number;
   osm_type: string;
@@ -49,6 +110,19 @@ export interface BuildingAddress {
   geometry: unknown;
 }
 
+/**
+ * Finds the nearest named street from OpenStreetMap data to a given coordinate.
+ * Uses PostGIS spatial indexing for efficient nearest-neighbor search.
+ *
+ * @param {Coordinate} centroid - The geographic point to search from
+ * @returns {Promise<Street | null>} The nearest street with distance, or null if none found
+ *
+ * @example
+ * const street = await findNearestOsmStreet({ lon: 32.5814, lat: 0.3476 });
+ * if (street && street.distance_m < 100) {
+ *   console.log(`Nearest street: ${street.name} at ${street.distance_m}m`);
+ * }
+ */
 export async function findNearestOsmStreet(
   centroid: Coordinate
 ): Promise<Street | null> {
@@ -70,6 +144,22 @@ export async function findNearestOsmStreet(
   return result;
 }
 
+/**
+ * Gets or creates a placeholder street for buildings not near any named OSM street.
+ * Placeholder streets are virtual streets based on a grid system, ensuring
+ * consistent addressing within geographic cells.
+ *
+ * @param {Coordinate} centroid - The building's geographic center point
+ * @param {string} regionCode - The region code to include in the placeholder ID (e.g., 'KLA')
+ * @returns {Promise<PlaceholderStreet>} The existing or newly created placeholder street
+ *
+ * @example
+ * const placeholder = await getOrCreatePlaceholderStreet(
+ *   { lon: 32.5814, lat: 0.3476 },
+ *   'KLA'
+ * );
+ * // Returns: { placeholder_id: 'KLA-3F9A00AB', display_name: 'Community Placeholder KLA-3F9A00AB', ... }
+ */
 export async function getOrCreatePlaceholderStreet(
   centroid: Coordinate,
   regionCode: string
@@ -116,6 +206,26 @@ export async function getOrCreatePlaceholderStreet(
   };
 }
 
+/**
+ * Calculates a deterministic house number for a building based on its
+ * position along a street. Uses linear referencing to determine the
+ * building's relative position and applies consistent spacing.
+ *
+ * @param {Coordinate} centroid - The building's geographic center point
+ * @param {string} streetGeometry - GeoJSON string of the street geometry
+ * @param {string} streetId - Identifier of the street (for future use)
+ * @param {'osm' | 'placeholder'} streetSource - Source of the street data
+ * @returns {Promise<number>} A house number (minimum 10, in increments of HOUSE_NUMBER_SPACING)
+ *
+ * @example
+ * const houseNumber = await calculateHouseNumber(
+ *   { lon: 32.5814, lat: 0.3476 },
+ *   '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
+ *   '12345',
+ *   'osm'
+ * );
+ * // Returns a number like 340, 350, 360, etc.
+ */
 export async function calculateHouseNumber(
   centroid: Coordinate,
   streetGeometry: string,
@@ -144,6 +254,25 @@ export async function calculateHouseNumber(
   return Math.max(10, houseNumber);
 }
 
+/**
+ * Assigns a community address to a building that lacks an official address.
+ * This is the main entry point for the address assignment algorithm.
+ *
+ * Algorithm steps:
+ * 1. Find the nearest named OSM street within MAX_STREET_DISTANCE_METERS
+ * 2. If no street found, create/get a placeholder street based on grid cell
+ * 3. Calculate a deterministic house number based on position along the street
+ * 4. Format and return the complete address
+ *
+ * @param {Coordinate} buildingCentroid - The building's geographic center point
+ * @param {string} [regionCode='KLA'] - Region code for placeholder street naming
+ * @returns {Promise<CommunityAddress>} The generated community address
+ *
+ * @example
+ * const address = await assignCommunityAddress({ lon: 32.5814, lat: 0.3476 });
+ * console.log(address.full_address);
+ * // Output: "340 Kampala Road [Unofficial / Community Address]"
+ */
 export async function assignCommunityAddress(
   buildingCentroid: Coordinate,
   regionCode: string = 'KLA'
@@ -194,6 +323,22 @@ export async function assignCommunityAddress(
   };
 }
 
+/**
+ * Retrieves a building by its OSM identifier and returns it with address information.
+ * If the building has an official OSM address, returns that. Otherwise,
+ * generates and returns a community address.
+ *
+ * @param {string} osmType - The OSM element type ('node', 'way', or 'relation')
+ * @param {number} osmId - The OSM unique identifier
+ * @returns {Promise<BuildingAddress | null>} Building with address info, or null if not found
+ *
+ * @example
+ * const building = await getBuildingWithAddress('way', 123456789);
+ * if (building) {
+ *   console.log(building.address_type); // 'official' or 'community'
+ *   console.log(building.address.full);
+ * }
+ */
 export async function getBuildingWithAddress(
   osmType: string,
   osmId: number

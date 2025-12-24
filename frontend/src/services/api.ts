@@ -1,7 +1,26 @@
+/**
+ * @fileoverview API service functions for the Community Address frontend.
+ * Provides typed fetch wrappers for communicating with the backend API.
+ * All functions handle errors by throwing descriptive Error objects.
+ */
+
 import type { BuildingCollection, Region, SuggestionPayload } from '../types';
 
+/** Base URL for all API requests */
 const API_BASE = '/api';
 
+/**
+ * Fetches buildings within a geographic bounding box.
+ * Returns buildings as a GeoJSON FeatureCollection with address information.
+ *
+ * @param {[number, number, number, number]} bbox - Bounding box as [minLon, minLat, maxLon, maxLat]
+ * @returns {Promise<BuildingCollection>} GeoJSON FeatureCollection of buildings
+ * @throws {Error} When the API request fails
+ *
+ * @example
+ * const buildings = await fetchBuildings([32.5, 0.3, 32.6, 0.4]);
+ * console.log(`Found ${buildings.features.length} buildings`);
+ */
 export async function fetchBuildings(bbox: [number, number, number, number]): Promise<BuildingCollection> {
   const bboxStr = bbox.join(',');
   const response = await fetch(`${API_BASE}/buildings?bbox=${bboxStr}`);
@@ -11,6 +30,22 @@ export async function fetchBuildings(bbox: [number, number, number, number]): Pr
   return response.json();
 }
 
+/**
+ * Fetches geographic regions from the API.
+ * Optionally filters by parent region code to get child regions.
+ *
+ * @param {string} [parent] - Parent region code to filter by (e.g., 'KLA' for Kampala)
+ * @returns {Promise<{ regions: Region[] }>} Object containing array of regions
+ * @throws {Error} When the API request fails
+ *
+ * @example
+ * // Get all top-level regions
+ * const { regions } = await fetchRegions();
+ *
+ * @example
+ * // Get child regions of Kampala
+ * const { regions } = await fetchRegions('KLA');
+ */
 export async function fetchRegions(parent?: string): Promise<{ regions: Region[] }> {
   const url = parent
     ? `${API_BASE}/regions?parent=${parent}`
@@ -22,6 +57,27 @@ export async function fetchRegions(parent?: string): Promise<{ regions: Region[]
   return response.json();
 }
 
+/**
+ * Submits a user suggestion or correction for a building address.
+ *
+ * @param {SuggestionPayload} payload - The suggestion data to submit
+ * @param {number} [payload.building_osm_id] - OSM ID of the building (optional)
+ * @param {string} payload.suggestion_type - Type of suggestion
+ * @param {string} payload.description - Description of the issue
+ * @param {string} [payload.suggested_value] - Suggested correction
+ * @param {string} [payload.contact_info] - Contact email for follow-up
+ * @returns {Promise<{ id: number; message: string }>} Confirmation with suggestion ID
+ * @throws {Error} When the API request fails
+ *
+ * @example
+ * const result = await submitSuggestion({
+ *   building_osm_id: 123456,
+ *   suggestion_type: 'address_correction',
+ *   description: 'The house number should be 42, not 24',
+ *   suggested_value: '42',
+ * });
+ * console.log(result.message);
+ */
 export async function submitSuggestion(payload: SuggestionPayload): Promise<{ id: number; message: string }> {
   const response = await fetch(`${API_BASE}/suggestions`, {
     method: 'POST',
@@ -36,6 +92,24 @@ export async function submitSuggestion(payload: SuggestionPayload): Promise<{ id
   return response.json();
 }
 
+/**
+ * Gets OpenStreetMap edit URLs for issues that should be fixed directly in OSM.
+ * Used for geometry errors, name corrections, and missing buildings.
+ *
+ * @param {number} osmId - The OSM ID of the building
+ * @param {'geometry_error' | 'name_correction' | 'missing_building'} issueType - Type of OSM issue
+ * @param {string} description - Description of the issue (min 10 chars)
+ * @returns {Promise<{ osm_edit_url: string; osm_note_url: string; message: string }>} URLs for OSM editing
+ * @throws {Error} When the API request fails
+ *
+ * @example
+ * const result = await getOsmRedirect(
+ *   123456,
+ *   'geometry_error',
+ *   'Building outline is shifted about 10 meters to the east'
+ * );
+ * window.open(result.osm_edit_url, '_blank');
+ */
 export async function getOsmRedirect(
   osmId: number,
   issueType: 'geometry_error' | 'name_correction' | 'missing_building',

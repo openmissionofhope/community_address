@@ -1,15 +1,53 @@
+/**
+ * @fileoverview Modal component for submitting address corrections and suggestions.
+ * Handles both local suggestions (stored in database) and OSM issues (redirects
+ * to OpenStreetMap editor).
+ */
+
 import { useState } from 'react';
 import type { BuildingFeature, SuggestionPayload } from '../types';
 import { submitSuggestion, getOsmRedirect } from '../services/api';
 
+/**
+ * Props for the SuggestionModal component.
+ * @interface SuggestionModalProps
+ * @property {BuildingFeature} building - The building being corrected
+ * @property {function} onClose - Callback to close the modal
+ * @property {function} onSubmitted - Callback after successful submission
+ */
 interface SuggestionModalProps {
   building: BuildingFeature;
   onClose: () => void;
   onSubmitted: () => void;
 }
 
+/** Type alias for suggestion types from the payload schema */
 type SuggestionType = SuggestionPayload['suggestion_type'];
 
+/**
+ * Modal form for submitting address corrections and suggestions.
+ *
+ * Handles two types of submissions:
+ * 1. Address corrections - Stored locally for moderator review
+ * 2. OSM issues (geometry, name, missing building) - Redirects to OpenStreetMap
+ *
+ * Features:
+ * - Form validation with minimum description length
+ * - Visual indicator for OSM-related issues
+ * - Loading state during submission
+ * - Error handling with user feedback
+ *
+ * @component
+ * @param {SuggestionModalProps} props - Component props
+ * @returns {JSX.Element} The rendered modal
+ *
+ * @example
+ * <SuggestionModal
+ *   building={selectedBuilding}
+ *   onClose={() => setShowModal(false)}
+ *   onSubmitted={() => showSuccessToast()}
+ * />
+ */
 export function SuggestionModal({ building, onClose, onSubmitted }: SuggestionModalProps) {
   const [type, setType] = useState<SuggestionType>('address_correction');
   const [description, setDescription] = useState('');

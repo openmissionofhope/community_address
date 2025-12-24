@@ -1,9 +1,26 @@
+/**
+ * @fileoverview Building layer component for rendering buildings on the map.
+ * Displays buildings as GeoJSON polygons with color-coded styling based on
+ * address type (official vs community). Includes popup functionality for
+ * viewing and interacting with building addresses.
+ */
+
 import { useEffect, useState, useCallback, memo } from 'react';
 import { GeoJSON, Popup, useMap } from 'react-leaflet';
 import type { LatLngBounds, Layer } from 'leaflet';
 import type { BuildingFeature, BuildingCollection } from '../types';
 import { fetchBuildings } from '../services/api';
 
+/**
+ * Props for the BuildingLayer component.
+ * @interface BuildingLayerProps
+ * @property {LatLngBounds} bounds - Current map bounding box for fetching buildings
+ * @property {function} onBuildingClick - Callback when a building is clicked
+ * @property {BuildingFeature|null} selectedBuilding - Currently selected building
+ * @property {function} onCopyAddress - Callback for copy address action
+ * @property {function} onShareAddress - Callback for share address action
+ * @property {function} onSuggestCorrection - Callback for suggest correction action
+ */
 interface BuildingLayerProps {
   bounds: LatLngBounds;
   onBuildingClick: (building: BuildingFeature) => void;
@@ -13,6 +30,20 @@ interface BuildingLayerProps {
   onSuggestCorrection: () => void;
 }
 
+/**
+ * Renders buildings on the map as interactive GeoJSON polygons.
+ *
+ * Features:
+ * - Fetches buildings within the current map bounds (zoom 15+)
+ * - Color-codes buildings: green for official addresses, orange for community
+ * - Highlights selected buildings with blue border
+ * - Shows popup with address details and action buttons
+ * - Debounces API requests by 300ms to prevent excessive calls
+ *
+ * @component
+ * @param {BuildingLayerProps} props - Component props
+ * @returns {JSX.Element|null} The building layer or null if no buildings
+ */
 function BuildingLayerComponent({
   bounds,
   onBuildingClick,
@@ -142,4 +173,8 @@ function BuildingLayerComponent({
   );
 }
 
+/**
+ * Memoized version of BuildingLayerComponent to prevent unnecessary re-renders.
+ * @type {React.MemoExoticComponent<typeof BuildingLayerComponent>}
+ */
 export const BuildingLayer = memo(BuildingLayerComponent);

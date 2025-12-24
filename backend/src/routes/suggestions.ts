@@ -1,8 +1,15 @@
+/**
+ * @fileoverview Suggestion routes for the Community Address API.
+ * Provides endpoints for users to submit address corrections and other
+ * suggestions, as well as redirect users to OpenStreetMap for map data issues.
+ */
+
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { query, queryOne } from '../db/connection.js';
 
+/** Schema for validating suggestion submission requests */
 const suggestionSchema = z.object({
   building_osm_id: z.number().optional(),
   suggestion_type: z.enum([
@@ -23,6 +30,7 @@ const suggestionSchema = z.object({
     .optional(),
 });
 
+/** Schema for validating OSM redirect requests */
 const osmRedirectSchema = z.object({
   building_osm_id: z.number(),
   issue_type: z.enum(['geometry_error', 'name_correction', 'missing_building']),
@@ -32,8 +40,35 @@ const osmRedirectSchema = z.object({
 type SuggestionBody = z.infer<typeof suggestionSchema>;
 type OsmRedirectBody = z.infer<typeof osmRedirectSchema>;
 
+/**
+ * Registers suggestion-related routes with the Fastify instance.
+ *
+ * Routes:
+ * - POST /suggestions - Submit a new suggestion or correction
+ * - POST /suggestions/osm-redirect - Get OSM edit URLs for map data issues
+ *
+ * @param {FastifyInstance} fastify - The Fastify server instance
+ * @returns {Promise<void>}
+ *
+ * @example
+ * // Register routes
+ * await fastify.register(suggestionsRoutes);
+ */
 export async function suggestionsRoutes(fastify: FastifyInstance) {
-  // POST /suggestions
+  /**
+   * POST /suggestions
+   * Submits a new suggestion or correction for a building address.
+   * The submitter's IP is hashed for rate limiting while preserving privacy.
+   *
+   * @bodyParam {number} [building_osm_id] - OSM ID of the building (optional)
+   * @bodyParam {string} suggestion_type - Type of suggestion (geometry_error, name_correction, address_correction, missing_building, other)
+   * @bodyParam {string} description - Description of the issue (10-1000 chars)
+   * @bodyParam {string} [suggested_value] - Suggested correction (max 500 chars)
+   * @bodyParam {string} [contact_info] - Email for follow-up (optional)
+   * @bodyParam {Object} [location] - Geographic location { lon, lat }
+   * @returns {Object} Confirmation with suggestion ID and status
+   * @throws {400} Invalid request body
+   */
   fastify.post<{ Body: SuggestionBody }>('/suggestions', async (request, reply) => {
     const parsed = suggestionSchema.safeParse(request.body);
 
@@ -98,7 +133,18 @@ export async function suggestionsRoutes(fastify: FastifyInstance) {
     });
   });
 
-  // POST /suggestions/osm-redirect
+  /**
+   * POST /suggestions/osm-redirect
+   * Generates OpenStreetMap edit and note URLs for issues that should be
+   * fixed directly in OSM (geometry errors, name corrections, missing buildings).
+   * Also logs the redirect for tracking purposes.
+   *
+   * @bodyParam {number} building_osm_id - OSM ID of the building
+   * @bodyParam {string} issue_type - Type of OSM issue (geometry_error, name_correction, missing_building)
+   * @bodyParam {string} description - Description of the issue (10-1000 chars)
+   * @returns {Object} OSM edit URL, note URL, and instructions
+   * @throws {400} Invalid request body
+   */
   fastify.post<{ Body: OsmRedirectBody }>(
     '/suggestions/osm-redirect',
     async (request, reply) => {

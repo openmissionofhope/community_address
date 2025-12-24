@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Main application component for Community Address.
+ * Renders an interactive map interface for viewing buildings and their
+ * addresses in Uganda. Users can click buildings to view addresses,
+ * copy/share addresses, and submit corrections.
+ */
+
 import { useState, useCallback } from 'react';
 import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
 import type { LatLngBounds } from 'leaflet';
@@ -8,10 +15,20 @@ import { SuggestionModal } from './components/SuggestionModal';
 import { Toast } from './components/Toast';
 import type { BuildingFeature } from './types';
 
-// Default center: Kampala, Uganda
+/** Default map center coordinates (Kampala, Uganda) */
 const DEFAULT_CENTER: [number, number] = [0.3476, 32.5814];
+
+/** Default map zoom level */
 const DEFAULT_ZOOM = 15;
 
+/**
+ * Internal component that listens to map movement events.
+ * Used to track the current map bounds for building data fetching.
+ *
+ * @param {Object} props - Component props
+ * @param {function} props.onBoundsChange - Callback fired when map bounds change
+ * @returns {null} This component renders nothing
+ */
 function MapEventHandler({
   onBoundsChange,
 }: {
@@ -28,6 +45,24 @@ function MapEventHandler({
   return null;
 }
 
+/**
+ * Main application component for Community Address.
+ *
+ * Provides an interactive map interface centered on Kampala, Uganda.
+ * Features include:
+ * - Viewing buildings with official and community-generated addresses
+ * - Clicking buildings to see address details in a popup
+ * - Copying or sharing addresses
+ * - Submitting corrections via a modal form
+ *
+ * @component
+ * @returns {JSX.Element} The rendered application
+ *
+ * @example
+ * // In main.tsx
+ * import App from './App';
+ * ReactDOM.render(<App />, document.getElementById('root'));
+ */
 export default function App() {
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingFeature | null>(null);

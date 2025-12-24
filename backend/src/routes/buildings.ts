@@ -1,23 +1,61 @@
+/**
+ * @fileoverview Building routes for the Community Address API.
+ * Provides endpoints for querying buildings within a bounding box
+ * and retrieving individual building details with address information.
+ */
+
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { query } from '../db/connection.js';
 import { getBuildingWithAddress, assignCommunityAddress } from '../services/address.js';
 
+/** Schema for validating bbox query parameter format */
 const bboxSchema = z.string().regex(/^-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*$/);
 
+/**
+ * Query parameters for the buildings endpoint.
+ * @interface BboxQuery
+ */
 interface BboxQuery {
   bbox: string;
   limit?: string;
   include_official?: string;
 }
 
+/**
+ * URL parameters for the single building endpoint.
+ * @interface BuildingParams
+ */
 interface BuildingParams {
   osm_type: string;
   osm_id: string;
 }
 
+/**
+ * Registers building-related routes with the Fastify instance.
+ *
+ * Routes:
+ * - GET /buildings - Retrieve buildings within a bounding box
+ * - GET /buildings/:osm_type/:osm_id - Retrieve a specific building by OSM ID
+ *
+ * @param {FastifyInstance} fastify - The Fastify server instance
+ * @returns {Promise<void>}
+ *
+ * @example
+ * // Register routes
+ * await fastify.register(buildingsRoutes);
+ */
 export async function buildingsRoutes(fastify: FastifyInstance) {
-  // GET /buildings?bbox=minLon,minLat,maxLon,maxLat
+  /**
+   * GET /buildings
+   * Retrieves buildings within a bounding box as a GeoJSON FeatureCollection.
+   * Buildings without official addresses will have community addresses generated.
+   *
+   * @queryParam {string} bbox - Bounding box as "minLon,minLat,maxLon,maxLat"
+   * @queryParam {string} [limit='500'] - Maximum number of buildings to return (max 2000)
+   * @queryParam {string} [include_official='true'] - Whether to include buildings with official addresses
+   * @returns {Object} GeoJSON FeatureCollection with building features
+   */
   fastify.get<{ Querystring: BboxQuery }>(
     '/buildings',
     async (request, reply) => {
@@ -119,7 +157,17 @@ export async function buildingsRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // GET /buildings/:osm_type/:osm_id
+  /**
+   * GET /buildings/:osm_type/:osm_id
+   * Retrieves a single building by its OSM type and ID.
+   * Returns the building as a GeoJSON Feature with address information.
+   *
+   * @param {string} osm_type - OSM element type ('node', 'way', or 'relation')
+   * @param {string} osm_id - OSM unique identifier
+   * @returns {Object} GeoJSON Feature with building geometry and address properties
+   * @throws {400} Invalid osm_type or osm_id
+   * @throws {404} Building not found
+   */
   fastify.get<{ Params: BuildingParams }>(
     '/buildings/:osm_type/:osm_id',
     async (request, reply) => {
