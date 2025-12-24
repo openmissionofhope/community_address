@@ -152,6 +152,7 @@ export default function App() {
   }, []);
 
   const handleBuildingClick = useCallback((building: BuildingFeature) => {
+    console.log('[App] handleBuildingClick called:', building.id);
     setSelectedBuilding(building);
   }, []);
 

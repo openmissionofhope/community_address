@@ -48,8 +48,10 @@ function BuildingLayerComponent({
 
   const loadBuildings = useCallback(async () => {
     const zoom = map.getZoom();
+    console.log('[BuildingLayer] loadBuildings called, zoom:', zoom);
     // Only load buildings at zoom level 15+
     if (zoom < 15) {
+      console.log('[BuildingLayer] Zoom too low, clearing buildings');
       setBuildings(null);
       return;
     }
@@ -61,12 +63,14 @@ function BuildingLayerComponent({
       bounds.getNorth(),
     ];
 
+    console.log('[BuildingLayer] Fetching buildings for bbox:', bbox);
     setLoading(true);
     try {
       const data = await fetchBuildings(bbox);
+      console.log('[BuildingLayer] Received', data.features.length, 'buildings');
       setBuildings(data);
     } catch (error) {
-      console.error('Failed to load buildings:', error);
+      console.error('[BuildingLayer] Failed to load buildings:', error);
     } finally {
       setLoading(false);
     }
@@ -79,28 +83,33 @@ function BuildingLayerComponent({
 
   // Show popup for selected building
   useEffect(() => {
+    console.log('[BuildingLayer] Popup effect triggered, selectedBuilding:', selectedBuilding?.id);
     // Early return if no building or map
     if (!selectedBuilding || !map) {
+      console.log('[BuildingLayer] No building or map, returning');
       return;
     }
 
     // Close existing popup
     if (popupRef.current) {
+      console.log('[BuildingLayer] Closing existing popup');
       map.closePopup(popupRef.current);
       popupRef.current = null;
     }
 
     // Safely get building info using tested utility
     const displayInfo = getBuildingDisplayInfo(selectedBuilding);
+    console.log('[BuildingLayer] Display info:', displayInfo);
     if (!displayInfo) {
-      console.error('Invalid building data:', selectedBuilding);
+      console.error('[BuildingLayer] Invalid building data:', selectedBuilding);
       return;
     }
 
     // Safely get centroid using tested utility
     const centroid = getBuildingCentroid(selectedBuilding);
+    console.log('[BuildingLayer] Centroid:', centroid);
     if (!centroid) {
-      console.error('Could not calculate centroid:', selectedBuilding.geometry);
+      console.error('[BuildingLayer] Could not calculate centroid:', selectedBuilding.geometry);
       return;
     }
 
@@ -147,8 +156,10 @@ function BuildingLayerComponent({
 
   const onEachFeature = useCallback(
     (feature: BuildingFeature, layer: Layer) => {
+      console.log('[BuildingLayer] Attaching click handler to feature:', feature.id);
       layer.on({
         click: (e: LeafletMouseEvent) => {
+          console.log('[BuildingLayer] Building clicked:', feature.id, feature.properties?.address);
           L.DomEvent.stopPropagation(e);
           onBuildingClick(feature);
         },
