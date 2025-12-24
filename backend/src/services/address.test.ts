@@ -78,8 +78,11 @@ describe('Address Service', () => {
   });
 
   describe('calculateHouseNumber', () => {
-    it('should calculate house number based on position', async () => {
+    it('should calculate odd house number for left side of road', async () => {
+      // First call: position along street
       mockQueryOne.mockResolvedValueOnce({ position: 0.5 });
+      // Second call: side of street (positive = left)
+      mockQueryOne.mockResolvedValueOnce({ side: 1 });
 
       const result = await calculateHouseNumber(
         { lon: 32.5814, lat: 0.3476 },
@@ -88,11 +91,18 @@ describe('Address Service', () => {
         'osm'
       );
 
-      expect(result).toBe(510);
+      // Left side at position 0.5: (50 * 2 + 1) * 5 = 505
+      expect(result).toBe(505);
+      // Verify it's an odd multiple of 5
+      expect(result % 5).toBe(0);
+      expect((result / 5) % 2).toBe(1);
     });
 
-    it('should return minimum house number 10', async () => {
-      mockQueryOne.mockResolvedValueOnce({ position: 0 });
+    it('should calculate even house number for right side of road', async () => {
+      // First call: position along street
+      mockQueryOne.mockResolvedValueOnce({ position: 0.5 });
+      // Second call: side of street (negative = right)
+      mockQueryOne.mockResolvedValueOnce({ side: -1 });
 
       const result = await calculateHouseNumber(
         { lon: 32.5814, lat: 0.3476 },
@@ -101,11 +111,46 @@ describe('Address Service', () => {
         'osm'
       );
 
+      // Right side at position 0.5: (50 * 2 + 2) * 5 = 510
+      expect(result).toBe(510);
+      // Verify it's an even multiple of 5
+      expect(result % 5).toBe(0);
+      expect((result / 5) % 2).toBe(0);
+    });
+
+    it('should return minimum house number 5 for left side', async () => {
+      mockQueryOne.mockResolvedValueOnce({ position: 0 });
+      mockQueryOne.mockResolvedValueOnce({ side: 1 });
+
+      const result = await calculateHouseNumber(
+        { lon: 32.5814, lat: 0.3476 },
+        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
+        '123456',
+        'osm'
+      );
+
+      // Left side at position 0: (0 * 2 + 1) * 5 = 5
+      expect(result).toBe(5);
+    });
+
+    it('should return minimum house number 10 for right side', async () => {
+      mockQueryOne.mockResolvedValueOnce({ position: 0 });
+      mockQueryOne.mockResolvedValueOnce({ side: -1 });
+
+      const result = await calculateHouseNumber(
+        { lon: 32.5814, lat: 0.3476 },
+        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
+        '123456',
+        'osm'
+      );
+
+      // Right side at position 0: (0 * 2 + 2) * 5 = 10
       expect(result).toBe(10);
     });
 
-    it('should handle null position result', async () => {
+    it('should handle null position result (defaults to left side)', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
+      mockQueryOne.mockResolvedValueOnce({ side: 0 }); // 0 defaults to left
 
       const result = await calculateHouseNumber(
         { lon: 32.5814, lat: 0.3476 },
@@ -114,7 +159,37 @@ describe('Address Service', () => {
         'osm'
       );
 
-      expect(result).toBe(510);
+      // Position defaults to 0.5, side 0 defaults to left: (50 * 2 + 1) * 5 = 505
+      expect(result).toBe(505);
+    });
+
+    it('should allocate numbers progressively along the street', async () => {
+      // Building near start of street (position 0.1)
+      mockQueryOne.mockResolvedValueOnce({ position: 0.1 });
+      mockQueryOne.mockResolvedValueOnce({ side: 1 }); // left
+
+      const resultNearStart = await calculateHouseNumber(
+        { lon: 32.58, lat: 0.34 },
+        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
+        '123456',
+        'osm'
+      );
+
+      // Building near end of street (position 0.9)
+      mockQueryOne.mockResolvedValueOnce({ position: 0.9 });
+      mockQueryOne.mockResolvedValueOnce({ side: 1 }); // left
+
+      const resultNearEnd = await calculateHouseNumber(
+        { lon: 32.59, lat: 0.35 },
+        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
+        '123456',
+        'osm'
+      );
+
+      // Start: (10 * 2 + 1) * 5 = 105, End: (90 * 2 + 1) * 5 = 905
+      expect(resultNearStart).toBe(105);
+      expect(resultNearEnd).toBe(905);
+      expect(resultNearEnd).toBeGreaterThan(resultNearStart);
     });
   });
 
@@ -128,16 +203,19 @@ describe('Address Service', () => {
       };
 
       mockQueryOne
-        .mockResolvedValueOnce(mockStreet)
-        .mockResolvedValueOnce({ position: 0.3 });
+        .mockResolvedValueOnce(mockStreet)    // findNearestOsmStreet
+        .mockResolvedValueOnce({ position: 0.3 })  // calculateHouseNumber position
+        .mockResolvedValueOnce({ side: 1 });       // determineSideOfStreet
 
       const result = await assignCommunityAddress({ lon: 32.5814, lat: 0.3476 });
 
       expect(result.street_source).toBe('osm');
       expect(result.street_name).toBe('Kampala Road');
       expect(result.street_id).toBe('123456');
-      expect(result.algorithm_version).toBe('v1.0');
+      expect(result.algorithm_version).toBe('v2.0');
       expect(result.full_address).toContain('[Unofficial / Community Address]');
+      // Position 0.3, left side: (30 * 2 + 1) * 5 = 305
+      expect(result.house_number).toBe(305);
     });
 
     it('should use placeholder street when OSM street is too far', async () => {
@@ -149,16 +227,52 @@ describe('Address Service', () => {
       };
 
       mockQueryOne
-        .mockResolvedValueOnce(mockStreet)
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ position: 0.5 });
+        .mockResolvedValueOnce(mockStreet)         // findNearestOsmStreet (too far)
+        .mockResolvedValueOnce(null)               // getOrCreatePlaceholderStreet check
+        .mockResolvedValueOnce({ position: 0.5 })  // calculateHouseNumber position
+        .mockResolvedValueOnce({ side: -1 });      // determineSideOfStreet (right)
 
-      mockQuery.mockResolvedValueOnce([]);
+      mockQuery.mockResolvedValueOnce([]);         // getOrCreatePlaceholderStreet insert
 
       const result = await assignCommunityAddress({ lon: 32.5814, lat: 0.3476 });
 
       expect(result.street_source).toBe('placeholder');
       expect(result.street_name).toContain('Community Placeholder');
+      // Position 0.5, right side: (50 * 2 + 2) * 5 = 510
+      expect(result.house_number).toBe(510);
+    });
+
+    it('should assign odd numbers for left side and even for right side', async () => {
+      const mockStreet = {
+        osm_id: 123456,
+        name: 'Test Road',
+        geometry: '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
+        distance_m: 50,
+      };
+
+      // Building on left side
+      mockQueryOne
+        .mockResolvedValueOnce(mockStreet)
+        .mockResolvedValueOnce({ position: 0.2 })
+        .mockResolvedValueOnce({ side: 1 });  // left
+
+      const leftResult = await assignCommunityAddress({ lon: 32.5814, lat: 0.3476 });
+
+      // Building on right side
+      mockQueryOne
+        .mockResolvedValueOnce(mockStreet)
+        .mockResolvedValueOnce({ position: 0.2 })
+        .mockResolvedValueOnce({ side: -1 });  // right
+
+      const rightResult = await assignCommunityAddress({ lon: 32.5814, lat: 0.3476 });
+
+      // Left: (20 * 2 + 1) * 5 = 205 (odd multiple of 5)
+      expect(leftResult.house_number).toBe(205);
+      expect((leftResult.house_number / 5) % 2).toBe(1);
+
+      // Right: (20 * 2 + 2) * 5 = 210 (even multiple of 5)
+      expect(rightResult.house_number).toBe(210);
+      expect((rightResult.house_number / 5) % 2).toBe(0);
     });
   });
 

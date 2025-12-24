@@ -3,13 +3,19 @@
  * Implements the algorithm for generating community addresses for buildings
  * that lack official addresses in OpenStreetMap data. Uses a deterministic
  * approach based on geographic location to ensure consistent address assignment.
+ *
+ * House Number Allocation Rules (v2.0):
+ * - Numbers are allocated in multiples of 5 (5, 10, 15, 20, ...)
+ * - Buildings on the LEFT side of the road receive ODD multiples (5, 15, 25, 35, ...)
+ * - Buildings on the RIGHT side of the road receive EVEN multiples (10, 20, 30, 40, ...)
+ * - Numbers increase progressively from the start to the end of the road
+ * - Side determination uses cross product of road direction and building position
  */
 
-import crypto from 'crypto';
 import { query, queryOne } from '../db/connection.js';
 
-/** Spacing between consecutive house numbers on a street */
-const HOUSE_NUMBER_SPACING = 10;
+/** Spacing between consecutive house numbers on a street (multiples of 5) */
+const HOUSE_NUMBER_SPACING = 5;
 
 /** Maximum distance in meters to associate a building with a named street */
 const MAX_STREET_DISTANCE_METERS = 100;
@@ -18,7 +24,7 @@ const MAX_STREET_DISTANCE_METERS = 100;
 const GRID_SIZE = 0.002;
 
 /** Current version of the address assignment algorithm */
-const ALGORITHM_VERSION = 'v1.0';
+const ALGORITHM_VERSION = 'v2.0';
 
 /**
  * Represents a geographic coordinate point.
@@ -207,15 +213,69 @@ export async function getOrCreatePlaceholderStreet(
 }
 
 /**
- * Calculates a deterministic house number for a building based on its
- * position along a street. Uses linear referencing to determine the
- * building's relative position and applies consistent spacing.
+ * Determines which side of a street a building is on.
+ * Uses cross product of the road direction vector and the vector to the building.
  *
  * @param {Coordinate} centroid - The building's geographic center point
  * @param {string} streetGeometry - GeoJSON string of the street geometry
- * @param {string} streetId - Identifier of the street (for future use)
- * @param {'osm' | 'placeholder'} streetSource - Source of the street data
- * @returns {Promise<number>} A house number (minimum 10, in increments of HOUSE_NUMBER_SPACING)
+ * @returns {Promise<'left' | 'right'>} The side of the street the building is on
+ */
+async function determineSideOfStreet(
+  centroid: Coordinate,
+  streetGeometry: string
+): Promise<'left' | 'right'> {
+  // Use PostGIS to calculate the cross product to determine side
+  // The sign of the cross product indicates which side of the line the point is on
+  const result = await queryOne<{ side: number }>(
+    `WITH line AS (
+      SELECT ST_GeomFromGeoJSON($1) AS geom
+    ),
+    building_point AS (
+      SELECT ST_SetSRID(ST_MakePoint($2, $3), 4326) AS geom
+    ),
+    closest_position AS (
+      SELECT ST_LineLocatePoint(line.geom, building_point.geom) AS pos
+      FROM line, building_point
+    ),
+    line_points AS (
+      -- Get two points on the line to determine direction
+      -- Use a small offset to get the direction at the closest point
+      SELECT
+        ST_LineInterpolatePoint(line.geom, GREATEST(0, pos - 0.01)) AS p1,
+        ST_LineInterpolatePoint(line.geom, LEAST(1, pos + 0.01)) AS p2
+      FROM line, closest_position
+    )
+    -- Calculate cross product: (p2 - p1) × (building - p1)
+    -- Positive = left side, Negative = right side
+    SELECT
+      SIGN(
+        (ST_X(p2) - ST_X(p1)) * (ST_Y(building_point.geom) - ST_Y(p1)) -
+        (ST_Y(p2) - ST_Y(p1)) * (ST_X(building_point.geom) - ST_X(p1))
+      ) AS side
+    FROM line_points, building_point`,
+    [streetGeometry, centroid.lon, centroid.lat]
+  );
+
+  // Positive cross product means left side, negative means right side
+  // If exactly on the line (0), default to left
+  return (result?.side ?? 0) >= 0 ? 'left' : 'right';
+}
+
+/**
+ * Calculates a deterministic house number for a building based on its
+ * position along a street and which side of the street it's on.
+ *
+ * House number allocation rules:
+ * - Numbers are multiples of 5 (5, 10, 15, 20, ...)
+ * - Buildings on the left side of the road get odd multiples (5, 15, 25, 35, ...)
+ * - Buildings on the right side of the road get even multiples (10, 20, 30, 40, ...)
+ * - Numbers are allocated from the start to the end of the road based on position
+ *
+ * @param {Coordinate} centroid - The building's geographic center point
+ * @param {string} streetGeometry - GeoJSON string of the street geometry
+ * @param {string} _streetId - Identifier of the street (reserved for future use)
+ * @param {'osm' | 'placeholder'} _streetSource - Source of the street data (reserved)
+ * @returns {Promise<number>} A house number (multiples of 5, odd for left, even for right)
  *
  * @example
  * const houseNumber = await calculateHouseNumber(
@@ -224,7 +284,7 @@ export async function getOrCreatePlaceholderStreet(
  *   '12345',
  *   'osm'
  * );
- * // Returns a number like 340, 350, 360, etc.
+ * // Returns 15 (left side) or 20 (right side) depending on building position
  */
 export async function calculateHouseNumber(
   centroid: Coordinate,
@@ -232,6 +292,7 @@ export async function calculateHouseNumber(
   _streetId: string,
   _streetSource: 'osm' | 'placeholder'
 ): Promise<number> {
+  // Get position along the street (0.0 = start, 1.0 = end)
   const positionResult = await queryOne<{ position: number }>(
     `SELECT ST_LineLocatePoint(
       ST_GeomFromGeoJSON($1),
@@ -242,16 +303,27 @@ export async function calculateHouseNumber(
 
   const position = positionResult?.position ?? 0.5;
 
-  // Deterministic hash for tie-breaking (reserved for future use)
-  const hashInput = `${centroid.lon.toFixed(8)},${centroid.lat.toFixed(8)}`;
-  const hash = crypto.createHash('md5').update(hashInput).digest('hex');
-  const _hashSuffix = parseInt(hash.substring(0, 4), 16) % 10;
+  // Determine which side of the street the building is on
+  const side = await determineSideOfStreet(centroid, streetGeometry);
 
-  // Base slot from position (0-99), then spacing
+  // Calculate base slot from position (0-99)
+  // This gives us the sequential position along the street
   const baseSlot = Math.floor(position * 100);
-  const houseNumber = (baseSlot + 1) * HOUSE_NUMBER_SPACING;
 
-  return Math.max(10, houseNumber);
+  // Calculate house number:
+  // - Left side (odd): 5, 15, 25, 35, ... → (slot * 2 + 1) * 5 = 5, 15, 25, ...
+  // - Right side (even): 10, 20, 30, 40, ... → (slot * 2 + 2) * 5 = 10, 20, 30, ...
+  let houseNumber: number;
+  if (side === 'left') {
+    // Odd multiples of 5: 5, 15, 25, 35, ...
+    houseNumber = (baseSlot * 2 + 1) * HOUSE_NUMBER_SPACING;
+  } else {
+    // Even multiples of 5: 10, 20, 30, 40, ...
+    houseNumber = (baseSlot * 2 + 2) * HOUSE_NUMBER_SPACING;
+  }
+
+  // Ensure minimum house number of 5
+  return Math.max(HOUSE_NUMBER_SPACING, houseNumber);
 }
 
 /**
@@ -261,17 +333,27 @@ export async function calculateHouseNumber(
  * Algorithm steps:
  * 1. Find the nearest named OSM street within MAX_STREET_DISTANCE_METERS
  * 2. If no street found, create/get a placeholder street based on grid cell
- * 3. Calculate a deterministic house number based on position along the street
- * 4. Format and return the complete address
+ * 3. Determine which side of the road the building is on (left or right)
+ * 4. Calculate a deterministic house number based on position and side:
+ *    - Left side: odd multiples of 5 (5, 15, 25, ...)
+ *    - Right side: even multiples of 5 (10, 20, 30, ...)
+ * 5. Format and return the complete address
  *
  * @param {Coordinate} buildingCentroid - The building's geographic center point
  * @param {string} [regionCode='KLA'] - Region code for placeholder street naming
  * @returns {Promise<CommunityAddress>} The generated community address
  *
  * @example
+ * // Building on left side of road, 30% along the street
  * const address = await assignCommunityAddress({ lon: 32.5814, lat: 0.3476 });
  * console.log(address.full_address);
- * // Output: "340 Kampala Road [Unofficial / Community Address]"
+ * // Output: "305 Kampala Road [Unofficial / Community Address]" (left side, odd)
+ *
+ * @example
+ * // Building on right side of road, 30% along the street
+ * const address = await assignCommunityAddress({ lon: 32.5820, lat: 0.3470 });
+ * console.log(address.full_address);
+ * // Output: "310 Kampala Road [Unofficial / Community Address]" (right side, even)
  */
 export async function assignCommunityAddress(
   buildingCentroid: Coordinate,
