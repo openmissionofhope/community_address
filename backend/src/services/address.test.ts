@@ -86,9 +86,7 @@ describe('Address Service', () => {
 
       const result = await calculateHouseNumber(
         { lon: 32.5814, lat: 0.3476 },
-        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
-        '123456',
-        'osm'
+        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}'
       );
 
       // Left side at position 0.5: (50 * 2 + 1) * 5 = 505
@@ -106,9 +104,7 @@ describe('Address Service', () => {
 
       const result = await calculateHouseNumber(
         { lon: 32.5814, lat: 0.3476 },
-        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
-        '123456',
-        'osm'
+        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}'
       );
 
       // Right side at position 0.5: (50 * 2 + 2) * 5 = 510
@@ -124,9 +120,7 @@ describe('Address Service', () => {
 
       const result = await calculateHouseNumber(
         { lon: 32.5814, lat: 0.3476 },
-        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
-        '123456',
-        'osm'
+        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}'
       );
 
       // Left side at position 0: (0 * 2 + 1) * 5 = 5
@@ -139,9 +133,7 @@ describe('Address Service', () => {
 
       const result = await calculateHouseNumber(
         { lon: 32.5814, lat: 0.3476 },
-        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
-        '123456',
-        'osm'
+        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}'
       );
 
       // Right side at position 0: (0 * 2 + 2) * 5 = 10
@@ -154,9 +146,7 @@ describe('Address Service', () => {
 
       const result = await calculateHouseNumber(
         { lon: 32.5814, lat: 0.3476 },
-        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
-        '123456',
-        'osm'
+        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}'
       );
 
       // Position defaults to 0.5, side 0 defaults to left: (50 * 2 + 1) * 5 = 505
@@ -170,9 +160,7 @@ describe('Address Service', () => {
 
       const resultNearStart = await calculateHouseNumber(
         { lon: 32.58, lat: 0.34 },
-        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
-        '123456',
-        'osm'
+        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}'
       );
 
       // Building near end of street (position 0.9)
@@ -181,9 +169,7 @@ describe('Address Service', () => {
 
       const resultNearEnd = await calculateHouseNumber(
         { lon: 32.59, lat: 0.35 },
-        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
-        '123456',
-        'osm'
+        '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}'
       );
 
       // Start: (10 * 2 + 1) * 5 = 105, End: (90 * 2 + 1) * 5 = 905

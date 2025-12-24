@@ -273,24 +273,18 @@ async function determineSideOfStreet(
  *
  * @param {Coordinate} centroid - The building's geographic center point
  * @param {string} streetGeometry - GeoJSON string of the street geometry
- * @param {string} _streetId - Identifier of the street (reserved for future use)
- * @param {'osm' | 'placeholder'} _streetSource - Source of the street data (reserved)
  * @returns {Promise<number>} A house number (multiples of 5, odd for left, even for right)
  *
  * @example
  * const houseNumber = await calculateHouseNumber(
  *   { lon: 32.5814, lat: 0.3476 },
- *   '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}',
- *   '12345',
- *   'osm'
+ *   '{"type":"LineString","coordinates":[[32.58,0.34],[32.59,0.35]]}'
  * );
  * // Returns 15 (left side) or 20 (right side) depending on building position
  */
 export async function calculateHouseNumber(
   centroid: Coordinate,
-  streetGeometry: string,
-  _streetId: string,
-  _streetSource: 'osm' | 'placeholder'
+  streetGeometry: string
 ): Promise<number> {
   // Get position along the street (0.0 = start, 1.0 = end)
   const positionResult = await queryOne<{ position: number }>(
@@ -387,9 +381,7 @@ export async function assignCommunityAddress(
   // Step 3: Calculate house number
   const houseNumber = await calculateHouseNumber(
     buildingCentroid,
-    streetGeometry,
-    streetId,
-    streetSource
+    streetGeometry
   );
 
   // Step 4: Format address
