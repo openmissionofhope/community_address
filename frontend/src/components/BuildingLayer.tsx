@@ -1,8 +1,8 @@
 /**
  * @fileoverview Building layer component for rendering buildings on the map.
  * Displays buildings as GeoJSON polygons with color-coded styling based on
- * address type (official vs community). Includes popup functionality for
- * viewing and interacting with building addresses.
+ * address type (official vs community). Includes simplified popup for
+ * viewing and sharing addresses.
  */
 
 import { useEffect, useState, useCallback, memo } from 'react';
@@ -13,13 +13,6 @@ import { fetchBuildings } from '../services/api';
 
 /**
  * Props for the BuildingLayer component.
- * @interface BuildingLayerProps
- * @property {LatLngBounds} bounds - Current map bounding box for fetching buildings
- * @property {function} onBuildingClick - Callback when a building is clicked
- * @property {BuildingFeature|null} selectedBuilding - Currently selected building
- * @property {function} onCopyAddress - Callback for copy address action
- * @property {function} onShareAddress - Callback for share address action
- * @property {function} onSuggestCorrection - Callback for suggest correction action
  */
 interface BuildingLayerProps {
   bounds: LatLngBounds;
@@ -27,22 +20,11 @@ interface BuildingLayerProps {
   selectedBuilding: BuildingFeature | null;
   onCopyAddress: () => void;
   onShareAddress: () => void;
-  onSuggestCorrection: () => void;
 }
 
 /**
  * Renders buildings on the map as interactive GeoJSON polygons.
- *
- * Features:
- * - Fetches buildings within the current map bounds (zoom 15+)
- * - Color-codes buildings: green for official addresses, orange for community
- * - Highlights selected buildings with blue border
- * - Shows popup with address details and action buttons
- * - Debounces API requests by 300ms to prevent excessive calls
- *
- * @component
- * @param {BuildingLayerProps} props - Component props
- * @returns {JSX.Element|null} The building layer or null if no buildings
+ * Simplified popup shows short address with copy/share buttons.
  */
 function BuildingLayerComponent({
   bounds,
@@ -50,7 +32,6 @@ function BuildingLayerComponent({
   selectedBuilding,
   onCopyAddress,
   onShareAddress,
-  onSuggestCorrection,
 }: BuildingLayerProps) {
   const [buildings, setBuildings] = useState<BuildingCollection | null>(null);
   const [loading, setLoading] = useState(false);
@@ -119,6 +100,12 @@ function BuildingLayerComponent({
     return null;
   }
 
+  // Get short address (house number + street only)
+  const getShortAddress = (building: BuildingFeature) => {
+    const addr = building.properties.address;
+    return `${addr.house_number} ${addr.street}`;
+  };
+
   return (
     <>
       <GeoJSON
@@ -139,16 +126,13 @@ function BuildingLayerComponent({
           ]}
         >
           <div className="address-popup">
-            <h3>Address</h3>
-            <div className="address-full">
-              {selectedBuilding.properties.address.full}
+            <div className="address-short">
+              {getShortAddress(selectedBuilding)}
             </div>
-            <span
-              className={`address-type ${selectedBuilding.properties.address_type}`}
-            >
+            <span className={`address-type ${selectedBuilding.properties.address_type}`}>
               {selectedBuilding.properties.address_type === 'official'
-                ? 'Official (OSM)'
-                : 'Community Address'}
+                ? 'Official'
+                : 'Community'}
             </span>
             <div className="actions">
               <button className="copy-btn" onClick={onCopyAddress}>
@@ -157,24 +141,18 @@ function BuildingLayerComponent({
               <button className="share-btn" onClick={onShareAddress}>
                 Share
               </button>
-              <button className="suggest-btn" onClick={onSuggestCorrection}>
-                Suggest Correction
-              </button>
             </div>
           </div>
         </Popup>
       )}
       {loading && (
-        <div className="loading-overlay">
-          <div className="loading-spinner" />
-        </div>
+        <div className="loading-indicator">Loading...</div>
       )}
     </>
   );
 }
 
 /**
- * Memoized version of BuildingLayerComponent to prevent unnecessary re-renders.
- * @type {React.MemoExoticComponent<typeof BuildingLayerComponent>}
+ * Memoized version of BuildingLayerComponent.
  */
 export const BuildingLayer = memo(BuildingLayerComponent);
