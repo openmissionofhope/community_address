@@ -71,6 +71,33 @@ chmod +x database/import-osm.sh
 ./database/import-osm.sh uganda-latest.osm.pbf
 ```
 
+### Importing Google Open Buildings
+
+For more comprehensive building coverage, import [Google Open Buildings](https://sites.research.google/open-buildings/) data. This adds ML-detected buildings that may not be in OSM.
+
+```bash
+cd database
+
+# Install dependencies
+pip install psycopg2-binary requests s2sphere
+
+# List supported countries (112 countries across Africa, Asia, Latin America)
+python import-google-buildings.py --list-countries
+
+# Import buildings for a specific country
+python import-google-buildings.py --country=UGA        # Uganda
+python import-google-buildings.py --country=KEN        # Kenya
+python import-google-buildings.py --country=IND        # India
+
+# Using environment variable
+COUNTRY_CODE=TZA python import-google-buildings.py     # Tanzania
+
+# Dry run (download only, no import)
+python import-google-buildings.py --country=UGA --dry-run
+```
+
+Country configurations are stored in `database/countries.json`. To add a new country, add its ISO 3166-1 alpha-3 code and bounding box to the JSON file.
+
 ## Local Development
 
 ### Backend
@@ -201,7 +228,9 @@ community_address/
 │       └── types/           # TypeScript types
 ├── database/
 │   ├── migrations/          # SQL schema
-│   └── import-osm.sh        # OSM import script
+│   ├── import-osm.sh        # OSM import script
+│   ├── import-google-buildings.py  # Google Open Buildings import
+│   └── countries.json       # Country configurations (bounds, names)
 ├── docs/
 │   └── ARCHITECTURE.md      # Technical design
 └── docker-compose.yml
