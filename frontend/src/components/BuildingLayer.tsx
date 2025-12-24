@@ -70,68 +70,93 @@ function BuildingLayerComponent({
     return () => clearTimeout(timeoutId);
   }, [loadBuildings]);
 
+  // Store callbacks in refs to avoid effect re-runs
+  const onCopyAddressRef = useRef(onCopyAddress);
+  const onShareAddressRef = useRef(onShareAddress);
+  useEffect(() => {
+    onCopyAddressRef.current = onCopyAddress;
+    onShareAddressRef.current = onShareAddress;
+  }, [onCopyAddress, onShareAddress]);
+
   // Show popup for selected building
   useEffect(() => {
-    if (selectedBuilding && map) {
-      // Close existing popup
-      if (popupRef.current) {
-        map.closePopup(popupRef.current);
+    if (!selectedBuilding || !map) {
+      return;
+    }
+
+    // Close existing popup
+    if (popupRef.current) {
+      map.closePopup(popupRef.current);
+      popupRef.current = null;
+    }
+
+    // Safely get address info
+    const addr = selectedBuilding.properties?.address;
+    if (!addr) {
+      console.error('Building has no address:', selectedBuilding);
+      return;
+    }
+
+    const houseNum = addr.house_number ?? '';
+    const street = addr.street ?? '';
+    const addressType = selectedBuilding.properties?.address_type ?? 'community';
+    const isOfficial = addressType === 'official';
+
+    const popupContent = document.createElement('div');
+    popupContent.className = 'address-popup';
+    popupContent.innerHTML = `
+      <div class="address-short">${houseNum} ${street}</div>
+      <span class="address-type ${addressType}">
+        ${isOfficial ? 'Official' : 'Community'}
+      </span>
+      <div class="actions">
+        <button class="copy-btn">Copy</button>
+        <button class="share-btn">Share</button>
+      </div>
+    `;
+
+    // Add event listeners using refs
+    const copyBtn = popupContent.querySelector('.copy-btn');
+    const shareBtn = popupContent.querySelector('.share-btn');
+    if (copyBtn) copyBtn.addEventListener('click', () => onCopyAddressRef.current());
+    if (shareBtn) shareBtn.addEventListener('click', () => onShareAddressRef.current());
+
+    // Calculate centroid
+    let lat = 0, lon = 0, count = 0;
+    try {
+      const coords = selectedBuilding.geometry?.coordinates;
+      if (!coords) throw new Error('No coordinates');
+
+      const geoType = selectedBuilding.geometry?.type;
+      let ring: number[][];
+
+      if (geoType === 'MultiPolygon') {
+        const firstPolygon = (coords as number[][][][])[0];
+        if (!firstPolygon?.[0]) throw new Error('Invalid MultiPolygon');
+        ring = firstPolygon[0];
+      } else {
+        ring = (coords as number[][][])[0];
+        if (!ring) throw new Error('Invalid Polygon');
       }
 
-      const addr = selectedBuilding.properties.address;
-      const isOfficial = selectedBuilding.properties.address_type === 'official';
-
-      const popupContent = document.createElement('div');
-      popupContent.className = 'address-popup';
-      popupContent.innerHTML = `
-        <div class="address-short">${addr.house_number} ${addr.street}</div>
-        <span class="address-type ${selectedBuilding.properties.address_type}">
-          ${isOfficial ? 'Official' : 'Community'}
-        </span>
-        <div class="actions">
-          <button class="copy-btn">Copy</button>
-          <button class="share-btn">Share</button>
-        </div>
-      `;
-
-      // Add event listeners
-      const copyBtn = popupContent.querySelector('.copy-btn');
-      const shareBtn = popupContent.querySelector('.share-btn');
-      if (copyBtn) copyBtn.addEventListener('click', onCopyAddress);
-      if (shareBtn) shareBtn.addEventListener('click', onShareAddress);
-
-      // Calculate centroid
-      let lat = 0, lon = 0, count = 0;
-      try {
-        const coords = selectedBuilding.geometry.coordinates;
-        const geoType = selectedBuilding.geometry.type;
-
-        let ring: number[][];
-        if (geoType === 'MultiPolygon') {
-          ring = (coords as number[][][][])[0][0];
-        } else {
-          ring = (coords as number[][][])[0];
+      for (const point of ring) {
+        if (Array.isArray(point) && point.length >= 2) {
+          lon += point[0];
+          lat += point[1];
+          count++;
         }
-
-        for (const point of ring) {
-          if (Array.isArray(point) && point.length >= 2) {
-            lon += point[0];
-            lat += point[1];
-            count++;
-          }
-        }
-      } catch (e) {
-        console.error('Failed to calculate centroid:', e);
       }
+    } catch (e) {
+      console.error('Failed to calculate centroid:', e, selectedBuilding.geometry);
+    }
 
-      if (count > 0) {
-        const popup = L.popup()
-          .setLatLng([lat / count, lon / count])
-          .setContent(popupContent)
-          .openOn(map);
+    if (count > 0) {
+      const popup = L.popup()
+        .setLatLng([lat / count, lon / count])
+        .setContent(popupContent)
+        .openOn(map);
 
-        popupRef.current = popup;
-      }
+      popupRef.current = popup;
     }
 
     return () => {
@@ -140,7 +165,7 @@ function BuildingLayerComponent({
         popupRef.current = null;
       }
     };
-  }, [selectedBuilding, map, onCopyAddress, onShareAddress]);
+  }, [selectedBuilding, map]);
 
   const onEachFeature = useCallback(
     (feature: BuildingFeature, layer: Layer) => {

@@ -155,22 +155,28 @@ export default function App() {
     setSelectedBuilding(building);
   }, []);
 
+  const selectedBuildingRef = useRef<BuildingFeature | null>(null);
+  useEffect(() => {
+    selectedBuildingRef.current = selectedBuilding;
+  }, [selectedBuilding]);
+
   const handleCopyAddress = useCallback(() => {
-    if (selectedBuilding) {
-      // Copy short address (house number + street)
-      const addr = selectedBuilding.properties.address;
-      const shortAddr = `${addr.house_number} ${addr.street}`;
+    const building = selectedBuildingRef.current;
+    if (building?.properties?.address) {
+      const addr = building.properties.address;
+      const shortAddr = `${addr.house_number ?? ''} ${addr.street ?? ''}`.trim();
       navigator.clipboard.writeText(shortAddr);
       setToast('Address copied');
       setTimeout(() => setToast(null), 2000);
     }
-  }, [selectedBuilding]);
+  }, []);
 
   const handleShareAddress = useCallback(async () => {
-    if (selectedBuilding) {
-      const url = getBuildingUrl(selectedBuilding);
-      const addr = selectedBuilding.properties.address;
-      const shortAddr = `${addr.house_number} ${addr.street}`;
+    const building = selectedBuildingRef.current;
+    if (building?.properties?.address) {
+      const url = getBuildingUrl(building);
+      const addr = building.properties.address;
+      const shortAddr = `${addr.house_number ?? ''} ${addr.street ?? ''}`.trim();
 
       if (navigator.share) {
         try {
@@ -191,7 +197,7 @@ export default function App() {
         setTimeout(() => setToast(null), 2000);
       }
     }
-  }, [selectedBuilding]);
+  }, []);
 
   const handleLinkedBuildingLoaded = useCallback(() => {
     setLinkedBuilding(null);
