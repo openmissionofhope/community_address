@@ -1,11 +1,25 @@
+/**
+ * @fileoverview Region routes for the Community Address API.
+ * Provides endpoints for querying geographic regions with building statistics.
+ * Regions are organized hierarchically (country, district, city, etc.).
+ */
+
 import { FastifyInstance } from 'fastify';
 import { query } from '../db/connection.js';
 
+/**
+ * Query parameters for the regions endpoint.
+ * @interface RegionsQuery
+ */
 interface RegionsQuery {
   parent?: string;
   level?: string;
 }
 
+/**
+ * Database row structure for region queries.
+ * @interface RegionRow
+ */
 interface RegionRow {
   code: string;
   name: string;
@@ -17,9 +31,38 @@ interface RegionRow {
   community_address_count: string;
 }
 
+/**
+ * Registers region-related routes with the Fastify instance.
+ *
+ * Routes:
+ * - GET /regions - Retrieve regions with optional filtering
+ *
+ * @param {FastifyInstance} fastify - The Fastify server instance
+ * @returns {Promise<void>}
+ *
+ * @example
+ * // Register routes
+ * await fastify.register(regionsRoutes);
+ *
+ * @example
+ * // Query child regions of a parent
+ * // GET /regions?parent=KLA
+ *
+ * @example
+ * // Query regions at a specific level
+ * // GET /regions?level=2
+ */
 export async function regionsRoutes(fastify: FastifyInstance) {
-  // GET /regions
-  fastify.get<{ Querystring: RegionsQuery }>('/regions', async (request, reply) => {
+  /**
+   * GET /regions
+   * Retrieves a list of geographic regions with building statistics.
+   * Regions can be filtered by parent code and/or administrative level.
+   *
+   * @queryParam {string} [parent] - Filter by parent region code
+   * @queryParam {string} [level] - Filter by administrative level (0=country, 1=district, etc.)
+   * @returns {Object} Object containing array of regions with statistics
+   */
+  fastify.get<{ Querystring: RegionsQuery }>('/regions', async (request, _reply) => {
     const { parent, level } = request.query;
 
     let whereClause = '';
