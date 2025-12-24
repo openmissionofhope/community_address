@@ -17,7 +17,7 @@ import { getBuildingWithAddress, assignCommunityAddress } from '../services/addr
 
 const mockQuery = vi.mocked(query);
 const mockGetBuildingWithAddress = vi.mocked(getBuildingWithAddress);
-const mockAssignCommunityAddress = vi.mocked(assignCommunityAddress);
+vi.mocked(assignCommunityAddress);
 
 describe('Buildings Routes', () => {
   let app: FastifyInstance;

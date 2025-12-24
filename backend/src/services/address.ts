@@ -229,8 +229,8 @@ export async function getOrCreatePlaceholderStreet(
 export async function calculateHouseNumber(
   centroid: Coordinate,
   streetGeometry: string,
-  streetId: string,
-  streetSource: 'osm' | 'placeholder'
+  _streetId: string,
+  _streetSource: 'osm' | 'placeholder'
 ): Promise<number> {
   const positionResult = await queryOne<{ position: number }>(
     `SELECT ST_LineLocatePoint(
@@ -242,10 +242,10 @@ export async function calculateHouseNumber(
 
   const position = positionResult?.position ?? 0.5;
 
-  // Deterministic hash for tie-breaking
+  // Deterministic hash for tie-breaking (reserved for future use)
   const hashInput = `${centroid.lon.toFixed(8)},${centroid.lat.toFixed(8)}`;
   const hash = crypto.createHash('md5').update(hashInput).digest('hex');
-  const hashSuffix = parseInt(hash.substring(0, 4), 16) % 10;
+  const _hashSuffix = parseInt(hash.substring(0, 4), 16) % 10;
 
   // Base slot from position (0-99), then spacing
   const baseSlot = Math.floor(position * 100);

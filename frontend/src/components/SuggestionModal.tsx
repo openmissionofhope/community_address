@@ -83,7 +83,7 @@ export function SuggestionModal({ building, onClose, onSubmitted }: SuggestionMo
         });
         onSubmitted();
       }
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to submit suggestion. Please try again.');
     } finally {
       setSubmitting(false);

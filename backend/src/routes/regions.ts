@@ -62,7 +62,7 @@ export async function regionsRoutes(fastify: FastifyInstance) {
    * @queryParam {string} [level] - Filter by administrative level (0=country, 1=district, etc.)
    * @returns {Object} Object containing array of regions with statistics
    */
-  fastify.get<{ Querystring: RegionsQuery }>('/regions', async (request, reply) => {
+  fastify.get<{ Querystring: RegionsQuery }>('/regions', async (request, _reply) => {
     const { parent, level } = request.query;
 
     let whereClause = '';

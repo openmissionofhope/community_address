@@ -4,7 +4,7 @@
  * and retrieving individual building details with address information.
  */
 
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { query } from '../db/connection.js';
 import { getBuildingWithAddress, assignCommunityAddress } from '../services/address.js';
