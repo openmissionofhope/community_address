@@ -5,9 +5,10 @@
  * viewing and sharing addresses.
  */
 
-import { useEffect, useState, useCallback, memo } from 'react';
-import { GeoJSON, Popup, useMap } from 'react-leaflet';
-import type { LatLngBounds, Layer } from 'leaflet';
+import { useEffect, useState, useCallback, memo, useRef } from 'react';
+import { GeoJSON, useMap } from 'react-leaflet';
+import type { LatLngBounds, Layer, LeafletMouseEvent } from 'leaflet';
+import L from 'leaflet';
 import type { BuildingFeature, BuildingCollection } from '../types';
 import { fetchBuildings } from '../services/api';
 
@@ -36,6 +37,7 @@ function BuildingLayerComponent({
   const [buildings, setBuildings] = useState<BuildingCollection | null>(null);
   const [loading, setLoading] = useState(false);
   const map = useMap();
+  const popupRef = useRef<L.Popup | null>(null);
 
   const loadBuildings = useCallback(async () => {
     const zoom = map.getZoom();
@@ -68,10 +70,83 @@ function BuildingLayerComponent({
     return () => clearTimeout(timeoutId);
   }, [loadBuildings]);
 
+  // Show popup for selected building
+  useEffect(() => {
+    if (selectedBuilding && map) {
+      // Close existing popup
+      if (popupRef.current) {
+        map.closePopup(popupRef.current);
+      }
+
+      const addr = selectedBuilding.properties.address;
+      const isOfficial = selectedBuilding.properties.address_type === 'official';
+
+      const popupContent = document.createElement('div');
+      popupContent.className = 'address-popup';
+      popupContent.innerHTML = `
+        <div class="address-short">${addr.house_number} ${addr.street}</div>
+        <span class="address-type ${selectedBuilding.properties.address_type}">
+          ${isOfficial ? 'Official' : 'Community'}
+        </span>
+        <div class="actions">
+          <button class="copy-btn">Copy</button>
+          <button class="share-btn">Share</button>
+        </div>
+      `;
+
+      // Add event listeners
+      const copyBtn = popupContent.querySelector('.copy-btn');
+      const shareBtn = popupContent.querySelector('.share-btn');
+      if (copyBtn) copyBtn.addEventListener('click', onCopyAddress);
+      if (shareBtn) shareBtn.addEventListener('click', onShareAddress);
+
+      // Calculate centroid
+      let lat = 0, lon = 0, count = 0;
+      try {
+        const coords = selectedBuilding.geometry.coordinates;
+        const geoType = selectedBuilding.geometry.type;
+
+        let ring: number[][];
+        if (geoType === 'MultiPolygon') {
+          ring = (coords as number[][][][])[0][0];
+        } else {
+          ring = (coords as number[][][])[0];
+        }
+
+        for (const point of ring) {
+          if (Array.isArray(point) && point.length >= 2) {
+            lon += point[0];
+            lat += point[1];
+            count++;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to calculate centroid:', e);
+      }
+
+      if (count > 0) {
+        const popup = L.popup()
+          .setLatLng([lat / count, lon / count])
+          .setContent(popupContent)
+          .openOn(map);
+
+        popupRef.current = popup;
+      }
+    }
+
+    return () => {
+      if (popupRef.current) {
+        map.closePopup(popupRef.current);
+        popupRef.current = null;
+      }
+    };
+  }, [selectedBuilding, map, onCopyAddress, onShareAddress]);
+
   const onEachFeature = useCallback(
     (feature: BuildingFeature, layer: Layer) => {
       layer.on({
-        click: () => {
+        click: (e: LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(e);
           onBuildingClick(feature);
         },
       });
@@ -100,37 +175,6 @@ function BuildingLayerComponent({
     return null;
   }
 
-  // Get short address (house number + street only)
-  const getShortAddress = (building: BuildingFeature) => {
-    const addr = building.properties.address;
-    return `${addr.house_number} ${addr.street}`;
-  };
-
-  // Safely get centroid of building geometry (handles Polygon and MultiPolygon)
-  const getCentroid = (building: BuildingFeature): [number, number] => {
-    try {
-      let ring: number[][];
-      if (building.geometry.type === 'MultiPolygon') {
-        ring = (building.geometry.coordinates as number[][][][])[0][0];
-      } else {
-        ring = (building.geometry.coordinates as number[][][])[0];
-      }
-
-      if (!ring || ring.length === 0) {
-        return [0, 0];
-      }
-
-      let sumLat = 0, sumLon = 0;
-      for (const [lon, lat] of ring) {
-        sumLon += lon;
-        sumLat += lat;
-      }
-      return [sumLat / ring.length, sumLon / ring.length];
-    } catch {
-      return [0, 0];
-    }
-  };
-
   return (
     <>
       <GeoJSON
@@ -139,28 +183,6 @@ function BuildingLayerComponent({
         style={getStyle as unknown as L.StyleFunction}
         onEachFeature={onEachFeature as unknown as (feature: GeoJSON.Feature, layer: L.Layer) => void}
       />
-      {selectedBuilding && (
-        <Popup position={getCentroid(selectedBuilding)}>
-          <div className="address-popup">
-            <div className="address-short">
-              {getShortAddress(selectedBuilding)}
-            </div>
-            <span className={`address-type ${selectedBuilding.properties.address_type}`}>
-              {selectedBuilding.properties.address_type === 'official'
-                ? 'Official'
-                : 'Community'}
-            </span>
-            <div className="actions">
-              <button className="copy-btn" onClick={onCopyAddress}>
-                Copy
-              </button>
-              <button className="share-btn" onClick={onShareAddress}>
-                Share
-              </button>
-            </div>
-          </div>
-        </Popup>
-      )}
       {loading && (
         <div className="loading-indicator">Loading...</div>
       )}
