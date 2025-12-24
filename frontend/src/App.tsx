@@ -46,16 +46,30 @@ function getBuildingUrl(building: BuildingFeature): string {
 }
 
 /**
- * Gets the centroid of a building geometry.
+ * Gets the centroid of a building geometry (handles Polygon and MultiPolygon).
  */
 function getBuildingCentroid(building: BuildingFeature): [number, number] {
-  const coords = building.geometry.coordinates[0];
-  let lat = 0, lon = 0;
-  for (const [x, y] of coords) {
-    lon += x;
-    lat += y;
+  try {
+    let ring: number[][];
+    if (building.geometry.type === 'MultiPolygon') {
+      ring = (building.geometry.coordinates as number[][][][])[0][0];
+    } else {
+      ring = (building.geometry.coordinates as number[][][])[0];
+    }
+
+    if (!ring || ring.length === 0) {
+      return [0, 0];
+    }
+
+    let sumLat = 0, sumLon = 0;
+    for (const [lon, lat] of ring) {
+      sumLon += lon;
+      sumLat += lat;
+    }
+    return [sumLat / ring.length, sumLon / ring.length];
+  } catch {
+    return [0, 0];
   }
-  return [lat / coords.length, lon / coords.length];
 }
 
 /**
