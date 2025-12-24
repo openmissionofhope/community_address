@@ -12,8 +12,8 @@ export interface BuildingFeature {
   type: 'Feature';
   id: string;
   geometry: {
-    type: 'Polygon';
-    coordinates: number[][][];
+    type: 'Polygon' | 'MultiPolygon';
+    coordinates: number[][][] | number[][][][];
   };
   properties: {
     osm_id: number;

@@ -106,6 +106,31 @@ function BuildingLayerComponent({
     return `${addr.house_number} ${addr.street}`;
   };
 
+  // Safely get centroid of building geometry (handles Polygon and MultiPolygon)
+  const getCentroid = (building: BuildingFeature): [number, number] => {
+    try {
+      let ring: number[][];
+      if (building.geometry.type === 'MultiPolygon') {
+        ring = (building.geometry.coordinates as number[][][][])[0][0];
+      } else {
+        ring = (building.geometry.coordinates as number[][][])[0];
+      }
+
+      if (!ring || ring.length === 0) {
+        return [0, 0];
+      }
+
+      let sumLat = 0, sumLon = 0;
+      for (const [lon, lat] of ring) {
+        sumLon += lon;
+        sumLat += lat;
+      }
+      return [sumLat / ring.length, sumLon / ring.length];
+    } catch {
+      return [0, 0];
+    }
+  };
+
   return (
     <>
       <GeoJSON
@@ -115,16 +140,7 @@ function BuildingLayerComponent({
         onEachFeature={onEachFeature as unknown as (feature: GeoJSON.Feature, layer: L.Layer) => void}
       />
       {selectedBuilding && (
-        <Popup
-          position={[
-            (selectedBuilding.geometry.coordinates[0][0][1] +
-              selectedBuilding.geometry.coordinates[0][2][1]) /
-              2,
-            (selectedBuilding.geometry.coordinates[0][0][0] +
-              selectedBuilding.geometry.coordinates[0][2][0]) /
-              2,
-          ]}
-        >
+        <Popup position={getCentroid(selectedBuilding)}>
           <div className="address-popup">
             <div className="address-short">
               {getShortAddress(selectedBuilding)}
