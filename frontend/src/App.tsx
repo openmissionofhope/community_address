@@ -1,18 +1,18 @@
 /**
  * @fileoverview Main application component for Community Address.
  * Renders an interactive map interface for viewing buildings and their
- * addresses in Uganda. Users can click buildings to view addresses,
- * copy/share addresses, and submit corrections.
+ * addresses. Users can click buildings to view addresses, copy/share
+ * addresses, and share direct links to buildings.
  */
 
-import { useState, useCallback } from 'react';
-import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, useMapEvents, useMap } from 'react-leaflet';
 import type { LatLngBounds } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { BuildingLayer } from './components/BuildingLayer';
-import { SuggestionModal } from './components/SuggestionModal';
 import { Toast } from './components/Toast';
+import { fetchBuilding } from './services/api';
 import type { BuildingFeature } from './types';
 
 /** Default map center coordinates (Kampala, Uganda) */
@@ -21,13 +21,45 @@ const DEFAULT_CENTER: [number, number] = [0.3476, 32.5814];
 /** Default map zoom level */
 const DEFAULT_ZOOM = 15;
 
+/** Zoom level for viewing a specific building */
+const BUILDING_ZOOM = 18;
+
+/**
+ * Parses the URL hash to extract building ID.
+ * Format: #/b/{osm_type}/{osm_id}
+ */
+function parseUrlHash(): { osmType: string; osmId: number } | null {
+  const hash = window.location.hash;
+  const match = hash.match(/^#\/b\/(node|way|relation)\/(\d+)$/);
+  if (match) {
+    return { osmType: match[1], osmId: parseInt(match[2]) };
+  }
+  return null;
+}
+
+/**
+ * Generates a shareable URL for a building.
+ */
+function getBuildingUrl(building: BuildingFeature): string {
+  const [osmType, osmId] = building.id.split('/');
+  return `${window.location.origin}${window.location.pathname}#/b/${osmType}/${osmId}`;
+}
+
+/**
+ * Gets the centroid of a building geometry.
+ */
+function getBuildingCentroid(building: BuildingFeature): [number, number] {
+  const coords = building.geometry.coordinates[0];
+  let lat = 0, lon = 0;
+  for (const [x, y] of coords) {
+    lon += x;
+    lat += y;
+  }
+  return [lat / coords.length, lon / coords.length];
+}
+
 /**
  * Internal component that listens to map movement events.
- * Used to track the current map bounds for building data fetching.
- *
- * @param {Object} props - Component props
- * @param {function} props.onBoundsChange - Callback fired when map bounds change
- * @returns {null} This component renders nothing
  */
 function MapEventHandler({
   onBoundsChange,
@@ -46,28 +78,60 @@ function MapEventHandler({
 }
 
 /**
+ * Component that handles flying to a building location.
+ */
+function FlyToBuilding({ building, onComplete }: { building: BuildingFeature | null; onComplete: () => void }) {
+  const map = useMap();
+  const hasFlown = useRef(false);
+
+  useEffect(() => {
+    if (building && !hasFlown.current) {
+      const [lat, lon] = getBuildingCentroid(building);
+      map.flyTo([lat, lon], BUILDING_ZOOM, { duration: 1 });
+      hasFlown.current = true;
+      onComplete();
+    }
+  }, [building, map, onComplete]);
+
+  return null;
+}
+
+/**
  * Main application component for Community Address.
- *
- * Provides an interactive map interface centered on Kampala, Uganda.
- * Features include:
- * - Viewing buildings with official and community-generated addresses
- * - Clicking buildings to see address details in a popup
- * - Copying or sharing addresses
- * - Submitting corrections via a modal form
- *
- * @component
- * @returns {JSX.Element} The rendered application
- *
- * @example
- * // In main.tsx
- * import App from './App';
- * ReactDOM.render(<App />, document.getElementById('root'));
  */
 export default function App() {
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingFeature | null>(null);
-  const [showSuggestionModal, setShowSuggestionModal] = useState(false);
+  const [linkedBuilding, setLinkedBuilding] = useState<BuildingFeature | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Load building from URL hash on mount
+  useEffect(() => {
+    const loadLinkedBuilding = async () => {
+      const parsed = parseUrlHash();
+      if (parsed) {
+        try {
+          const building = await fetchBuilding(parsed.osmType, parsed.osmId);
+          setLinkedBuilding(building);
+          setSelectedBuilding(building);
+        } catch {
+          setToast('Building not found');
+          setTimeout(() => setToast(null), 3000);
+          // Clear invalid hash
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      }
+    };
+    loadLinkedBuilding();
+  }, []);
+
+  // Update URL hash when building is selected
+  useEffect(() => {
+    if (selectedBuilding) {
+      const url = getBuildingUrl(selectedBuilding);
+      window.history.replaceState(null, '', url.replace(window.location.origin, ''));
+    }
+  }, [selectedBuilding]);
 
   const handleBoundsChange = useCallback((newBounds: LatLngBounds) => {
     setBounds(newBounds);
@@ -79,42 +143,51 @@ export default function App() {
 
   const handleCopyAddress = useCallback(() => {
     if (selectedBuilding) {
-      navigator.clipboard.writeText(selectedBuilding.properties.address.full);
-      setToast('Address copied to clipboard');
+      // Copy short address (house number + street)
+      const addr = selectedBuilding.properties.address;
+      const shortAddr = `${addr.house_number} ${addr.street}`;
+      navigator.clipboard.writeText(shortAddr);
+      setToast('Address copied');
       setTimeout(() => setToast(null), 2000);
     }
   }, [selectedBuilding]);
 
   const handleShareAddress = useCallback(async () => {
-    if (selectedBuilding && navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Address',
-          text: selectedBuilding.properties.address.full,
-        });
-      } catch {
-        // User cancelled or share failed
+    if (selectedBuilding) {
+      const url = getBuildingUrl(selectedBuilding);
+      const addr = selectedBuilding.properties.address;
+      const shortAddr = `${addr.house_number} ${addr.street}`;
+
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: 'Community Address',
+            text: shortAddr,
+            url: url,
+          });
+        } catch {
+          // User cancelled or share failed - fall back to copy
+          navigator.clipboard.writeText(url);
+          setToast('Link copied');
+          setTimeout(() => setToast(null), 2000);
+        }
+      } else {
+        navigator.clipboard.writeText(url);
+        setToast('Link copied');
+        setTimeout(() => setToast(null), 2000);
       }
-    } else if (selectedBuilding) {
-      handleCopyAddress();
     }
-  }, [selectedBuilding, handleCopyAddress]);
+  }, [selectedBuilding]);
 
-  const handleSuggestCorrection = useCallback(() => {
-    setShowSuggestionModal(true);
-  }, []);
-
-  const handleSuggestionSubmitted = useCallback(() => {
-    setShowSuggestionModal(false);
-    setToast('Suggestion submitted successfully');
-    setTimeout(() => setToast(null), 3000);
+  const handleLinkedBuildingLoaded = useCallback(() => {
+    setLinkedBuilding(null);
   }, []);
 
   return (
     <div className="app">
       <header className="app-header">
         <h1>Community Address</h1>
-        <span className="disclaimer">Unofficial addresses only</span>
+        <span className="disclaimer">Unofficial addresses</span>
       </header>
 
       <div className="map-container">
@@ -125,10 +198,11 @@ export default function App() {
           style={{ height: '100%', width: '100%' }}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <MapEventHandler onBoundsChange={handleBoundsChange} />
+          <FlyToBuilding building={linkedBuilding} onComplete={handleLinkedBuildingLoaded} />
           {bounds && (
             <BuildingLayer
               bounds={bounds}
@@ -136,19 +210,10 @@ export default function App() {
               selectedBuilding={selectedBuilding}
               onCopyAddress={handleCopyAddress}
               onShareAddress={handleShareAddress}
-              onSuggestCorrection={handleSuggestCorrection}
             />
           )}
         </MapContainer>
       </div>
-
-      {showSuggestionModal && selectedBuilding && (
-        <SuggestionModal
-          building={selectedBuilding}
-          onClose={() => setShowSuggestionModal(false)}
-          onSubmitted={handleSuggestionSubmitted}
-        />
-      )}
 
       {toast && <Toast message={toast} />}
     </div>

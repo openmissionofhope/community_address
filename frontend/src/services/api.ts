@@ -4,10 +4,26 @@
  * All functions handle errors by throwing descriptive Error objects.
  */
 
-import type { BuildingCollection, Region, SuggestionPayload } from '../types';
+import type { BuildingCollection, BuildingFeature, Region, SuggestionPayload } from '../types';
 
 /** Base URL for all API requests */
 const API_BASE = '/api';
+
+/**
+ * Fetches a single building by OSM type and ID.
+ *
+ * @param {string} osmType - OSM element type ('node', 'way', or 'relation')
+ * @param {number} osmId - OSM unique identifier
+ * @returns {Promise<BuildingFeature>} The building feature with address
+ * @throws {Error} When the API request fails or building not found
+ */
+export async function fetchBuilding(osmType: string, osmId: number): Promise<BuildingFeature> {
+  const response = await fetch(`${API_BASE}/buildings/${osmType}/${osmId}`);
+  if (!response.ok) {
+    throw new Error(response.status === 404 ? 'Building not found' : 'Failed to fetch building');
+  }
+  return response.json();
+}
 
 /**
  * Fetches buildings within a geographic bounding box.
