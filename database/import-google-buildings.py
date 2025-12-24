@@ -172,18 +172,20 @@ def apply_migration(conn):
         conn.commit()
 
 
-def import_csv_file(conn, filepath: Path, bounds: dict, batch_size: int = 1000):
+def import_csv_file(conn, filepath: Path, bounds: dict, batch_size: int = 5000):
     """Import a single CSV file into the database."""
     import csv
 
     imported = 0
     skipped = 0
+    processed = 0
 
     with gzip.open(filepath, 'rt') as f:
         reader = csv.DictReader(f)
 
         batch = []
         for row in reader:
+            processed += 1
             try:
                 lat = float(row['latitude'])
                 lon = float(row['longitude'])
@@ -206,6 +208,9 @@ def import_csv_file(conn, filepath: Path, bounds: dict, batch_size: int = 1000):
                 if len(batch) >= batch_size:
                     imported += insert_batch(conn, batch)
                     batch = []
+                    # Progress update every 50k rows
+                    if processed % 50000 == 0:
+                        print(f"      Progress: {processed:,} rows, {imported:,} imported", flush=True)
 
             except (ValueError, KeyError) as e:
                 skipped += 1
@@ -219,37 +224,46 @@ def import_csv_file(conn, filepath: Path, bounds: dict, batch_size: int = 1000):
 
 
 def insert_batch(conn, batch: list) -> int:
-    """Insert a batch of buildings, with deduplication."""
-    inserted = 0
+    """Insert a batch of buildings using efficient bulk insert."""
+    if not batch:
+        return 0
+
+    from psycopg2.extras import execute_values
+
     with conn.cursor() as cur:
-        for geometry, plus_code, confidence, area in batch:
-            try:
-                # Use savepoint so we can rollback just this insert on error
-                cur.execute("SAVEPOINT building_insert")
-                cur.execute("""
-                    INSERT INTO buildings (osm_id, osm_type, geometry, source, external_id, confidence, area_m2)
-                    SELECT
-                        NULL,
-                        'way',
-                        ST_Multi(ST_GeomFromText(%s, 4326)),
-                        'google',
-                        %s,
-                        %s,
-                        %s
-                    WHERE NOT EXISTS (
-                        SELECT 1 FROM buildings b
-                        WHERE b.external_id = %s AND b.source = 'google'
-                    )
-                    ON CONFLICT DO NOTHING
-                """, (geometry, plus_code, confidence, area, plus_code))
-                inserted += cur.rowcount
-                cur.execute("RELEASE SAVEPOINT building_insert")
-            except Exception as e:
-                # Rollback just this insert, not the whole batch
-                cur.execute("ROLLBACK TO SAVEPOINT building_insert")
-                continue
-    conn.commit()
-    return inserted
+        try:
+            # Bulk insert - only pass variable data (geometry, plus_code, confidence, area)
+            execute_values(
+                cur,
+                """
+                INSERT INTO buildings (osm_id, osm_type, geometry, source, external_id, confidence, area_m2)
+                VALUES %s
+                ON CONFLICT DO NOTHING
+                """,
+                batch,  # [(geometry, plus_code, confidence, area), ...]
+                template="(NULL, 'way', ST_Multi(ST_GeomFromText(%s, 4326)), 'google', %s, %s, %s)",
+                page_size=1000
+            )
+            inserted = cur.rowcount
+            conn.commit()
+            return inserted
+        except Exception as e:
+            conn.rollback()
+            # Fall back to individual inserts if bulk fails (e.g., bad geometry)
+            inserted = 0
+            for geometry, plus_code, confidence, area in batch:
+                try:
+                    cur.execute("""
+                        INSERT INTO buildings (osm_id, osm_type, geometry, source, external_id, confidence, area_m2)
+                        VALUES (NULL, 'way', ST_Multi(ST_GeomFromText(%s, 4326)), 'google', %s, %s, %s)
+                        ON CONFLICT DO NOTHING
+                    """, (geometry, plus_code, confidence, area))
+                    inserted += cur.rowcount
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    continue
+            return inserted
 
 
 def list_countries():
