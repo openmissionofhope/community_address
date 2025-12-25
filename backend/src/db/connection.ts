@@ -24,9 +24,9 @@ const pool = new Pool({
   database: process.env.DB_NAME || 'community_address',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'postgres',
-  max: 20,
+  max: 50,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000,
 });
 
 /**
