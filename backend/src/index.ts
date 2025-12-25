@@ -6,6 +6,9 @@ import { healthCheck } from './db/connection.js';
 import { buildingsRoutes } from './routes/buildings.js';
 import { suggestionsRoutes } from './routes/suggestions.js';
 import { regionsRoutes } from './routes/regions.js';
+import { usersRoutes } from './routes/users.js';
+import { claimsRoutes } from './routes/claims.js';
+import { accessRoutes } from './routes/access.js';
 
 const ALGORITHM_VERSION = 'v1.0';
 const API_VERSION = '1.0.0';
@@ -54,6 +57,9 @@ async function main() {
   await fastify.register(buildingsRoutes);
   await fastify.register(suggestionsRoutes);
   await fastify.register(regionsRoutes);
+  await fastify.register(usersRoutes);
+  await fastify.register(claimsRoutes);
+  await fastify.register(accessRoutes);
 
   // Start server
   const port = parseInt(process.env.PORT || '3000');
