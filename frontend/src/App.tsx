@@ -11,6 +11,7 @@ import type { LatLngBounds } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { BuildingLayer } from './components/BuildingLayer';
+import { RegionLayer } from './components/RegionLayer';
 import { Toast } from './components/Toast';
 import { fetchBuilding } from './services/api';
 import type { BuildingFeature } from './types';
@@ -98,6 +99,12 @@ function MapEventHandler({
       onBoundsChange(map.getBounds());
     },
   });
+
+  // Set initial bounds on mount
+  useEffect(() => {
+    onBoundsChange(map.getBounds());
+  }, [map, onBoundsChange]);
+
   return null;
 }
 
@@ -194,6 +201,7 @@ export default function App() {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+          <RegionLayer country="UG" />
           <MapEventHandler onBoundsChange={handleBoundsChange} />
           <FlyToBuilding building={linkedBuilding} onComplete={handleLinkedBuildingLoaded} />
           {bounds && (

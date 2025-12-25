@@ -49,3 +49,23 @@ export interface SuggestionPayload {
   suggested_value?: string;
   contact_info?: string;
 }
+
+export interface RegionFeature {
+  type: 'Feature';
+  id: string;
+  geometry: {
+    type: 'Polygon' | 'MultiPolygon';
+    coordinates: number[][][] | number[][][][];
+  };
+  properties: {
+    code: string;
+    name: string;
+    level: number;
+    parent_code: string | null;
+  };
+}
+
+export interface RegionCollection {
+  type: 'FeatureCollection';
+  features: RegionFeature[];
+}

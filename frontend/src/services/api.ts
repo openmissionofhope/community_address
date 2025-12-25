@@ -4,7 +4,7 @@
  * All functions handle errors by throwing descriptive Error objects.
  */
 
-import type { BuildingCollection, BuildingFeature, Region, SuggestionPayload } from '../types';
+import type { BuildingCollection, BuildingFeature, Region, RegionCollection, SuggestionPayload } from '../types';
 
 /** Base URL for all API requests */
 const API_BASE = '/api';
@@ -69,6 +69,25 @@ export async function fetchRegions(parent?: string): Promise<{ regions: Region[]
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error('Failed to fetch regions');
+  }
+  return response.json();
+}
+
+/**
+ * Fetches regions as GeoJSON for map display.
+ *
+ * @param {string} [country='UG'] - Country code to filter regions
+ * @param {number} [level=1] - Level to return (1=regions, 2=subregions)
+ * @returns {Promise<RegionCollection>} GeoJSON FeatureCollection of regions
+ * @throws {Error} When the API request fails
+ */
+export async function fetchRegionsGeoJson(
+  country: string = 'UG',
+  level: number = 1
+): Promise<RegionCollection> {
+  const response = await fetch(`${API_BASE}/regions/geojson?country=${country}&level=${level}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch regions GeoJSON');
   }
   return response.json();
 }

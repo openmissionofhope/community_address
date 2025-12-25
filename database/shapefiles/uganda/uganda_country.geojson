@@ -1,0 +1,42 @@
+{
+  "type": "FeatureCollection",
+  "name": "uganda_country",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "UG",
+        "name": "Uganda",
+        "level": 0,
+        "parent_code": null
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              29.5,
+              -1.5
+            ],
+            [
+              29.5,
+              4.2
+            ],
+            [
+              35.0,
+              4.2
+            ],
+            [
+              35.0,
+              -1.5
+            ],
+            [
+              29.5,
+              -1.5
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
