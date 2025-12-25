@@ -3,7 +3,7 @@
  * Provides user state and login/logout functions throughout the app.
  */
 
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { loginUser, User } from '../services/api';
 
 interface UserContextType {
@@ -17,22 +17,22 @@ const UserContext = createContext<UserContextType | null>(null);
 
 const USER_STORAGE_KEY = 'community_address_user';
 
-export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Load user from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(USER_STORAGE_KEY);
-    if (stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        localStorage.removeItem(USER_STORAGE_KEY);
-      }
+function getStoredUser(): User | null {
+  if (typeof window === 'undefined') return null;
+  const stored = localStorage.getItem(USER_STORAGE_KEY);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch {
+      localStorage.removeItem(USER_STORAGE_KEY);
     }
-    setLoading(false);
-  }, []);
+  }
+  return null;
+}
+
+export function UserProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(getStoredUser);
+  const [loading] = useState(false);
 
   const login = useCallback(async (phone: string) => {
     const result = await loginUser(phone);
