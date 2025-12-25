@@ -14,6 +14,9 @@ import { BuildingLayer } from './components/BuildingLayer';
 import { RegionLayer } from './components/RegionLayer';
 import { Toast } from './components/Toast';
 import { NoteModal } from './components/NoteModal';
+import { CorrectionModal } from './components/CorrectionModal';
+import { AuthModal } from './components/AuthModal';
+import { UserProvider, useUser } from './context/UserContext';
 import { fetchBuilding } from './services/api';
 import type { BuildingFeature } from './types';
 
@@ -129,14 +132,21 @@ function FlyToBuilding({ building, onComplete }: { building: BuildingFeature | n
 }
 
 /**
- * Main application component for Community Address.
+ * Inner app content with access to user context.
  */
-export default function App() {
+function AppContent() {
+  const { user } = useUser();
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingFeature | null>(null);
   const [linkedBuilding, setLinkedBuilding] = useState<BuildingFeature | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [noteModalBuildingId, setNoteModalBuildingId] = useState<number | null>(null);
+  const [correctionModal, setCorrectionModal] = useState<{
+    buildingId: number;
+    currentAddress?: { house_number?: string; street?: string };
+  } | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'note' | 'correction' | null>(null);
 
   // Listen for custom events from popup buttons
   useEffect(() => {
@@ -144,10 +154,15 @@ export default function App() {
       setNoteModalBuildingId(e.detail.buildingId);
     };
 
-    const handleSuggestCorrection = () => {
-      // For now, show a toast - correction modal can be added later
-      setToast('Correction feature coming soon!');
-      setTimeout(() => setToast(null), 3000);
+    const handleSuggestCorrection = (e: CustomEvent<{ buildingId: number }>) => {
+      const addr = selectedBuilding?.properties?.address;
+      setCorrectionModal({
+        buildingId: e.detail.buildingId,
+        currentAddress: addr ? {
+          house_number: String(addr.house_number || ''),
+          street: addr.street,
+        } : undefined,
+      });
     };
 
     window.addEventListener('addNote', handleAddNote as EventListener);
@@ -157,7 +172,7 @@ export default function App() {
       window.removeEventListener('addNote', handleAddNote as EventListener);
       window.removeEventListener('suggestCorrection', handleSuggestCorrection as EventListener);
     };
-  }, []);
+  }, [selectedBuilding]);
 
   // Load building from URL hash on mount
   useEffect(() => {
@@ -210,7 +225,18 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <h1>Community Address</h1>
-        <span className="disclaimer">Unofficial addresses</span>
+        <div className="header-right">
+          <span className="disclaimer">Unofficial addresses</span>
+          {user ? (
+            <button className="user-btn" onClick={() => setShowAuthModal(true)}>
+              {user.contribution_count} contributions
+            </button>
+          ) : (
+            <button className="login-btn" onClick={() => setShowAuthModal(true)}>
+              Sign in
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="map-container">
@@ -249,6 +275,48 @@ export default function App() {
           }}
         />
       )}
+
+      {correctionModal && (
+        <CorrectionModal
+          buildingId={correctionModal.buildingId}
+          currentAddress={correctionModal.currentAddress}
+          onClose={() => setCorrectionModal(null)}
+          onSuccess={() => {
+            setToast('Correction submitted!');
+            setTimeout(() => setToast(null), 3000);
+          }}
+          onNeedAuth={() => {
+            setPendingAction('correction');
+            setShowAuthModal(true);
+          }}
+        />
+      )}
+
+      {showAuthModal && (
+        <AuthModal
+          onClose={() => {
+            setShowAuthModal(false);
+            setPendingAction(null);
+          }}
+          onSuccess={() => {
+            if (pendingAction === 'correction' && correctionModal) {
+              // Modal stays open, user can now submit
+            }
+            setPendingAction(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Main application component wrapped with UserProvider.
+ */
+export default function App() {
+  return (
+    <UserProvider>
+      <AppContent />
+    </UserProvider>
   );
 }

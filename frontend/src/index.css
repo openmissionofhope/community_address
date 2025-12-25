@@ -114,10 +114,45 @@ body {
   color: #111827;
 }
 
-.app-header .disclaimer {
+.header-right {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-header .disclaimer {
   font-size: 12px;
   color: #9ca3af;
+}
+
+.login-btn, .user-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.login-btn {
+  background: #3b82f6;
+  border: none;
+  color: white;
+}
+
+.login-btn:hover {
+  background: #2563eb;
+}
+
+.user-btn {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+
+.user-btn:hover {
+  background: #e5e7eb;
 }
 
 /* Map container offset for header */
@@ -238,6 +273,60 @@ body {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+.modal-content input[type="text"],
+.modal-content input[type="tel"] {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.modal-content input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.modal-content select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: white;
+  cursor: pointer;
+}
+
+.modal-content select:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.modal-content label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 12px;
+}
+
+.modal-content label input,
+.modal-content label select {
+  margin-top: 6px;
+}
+
+.modal-content .info {
+  font-size: 13px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
 .modal-content .error {
   color: #dc2626;
   font-size: 13px;
@@ -294,6 +383,19 @@ body {
 
   .app-header h1 {
     font-size: 15px;
+  }
+
+  .header-right {
+    gap: 8px;
+  }
+
+  .header-right .disclaimer {
+    display: none;
+  }
+
+  .login-btn, .user-btn {
+    padding: 5px 10px;
+    font-size: 12px;
   }
 
   .map-container {

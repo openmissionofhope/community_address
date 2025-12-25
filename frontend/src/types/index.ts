@@ -16,6 +16,7 @@ export interface BuildingFeature {
     coordinates: number[][][] | number[][][][];
   };
   properties: {
+    id: number;
     osm_id: number;
     address_type: 'official' | 'community';
     address: Address;

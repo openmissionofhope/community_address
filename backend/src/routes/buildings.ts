@@ -71,6 +71,7 @@ export async function buildingsRoutes(fastify: FastifyInstance) {
       const [minLon, minLat, maxLon, maxLat] = bbox.split(',').map(Number);
 
       interface BuildingRow {
+        id: number;
         osm_id: number;
         osm_type: string;
         geometry: string;
@@ -82,6 +83,7 @@ export async function buildingsRoutes(fastify: FastifyInstance) {
 
       const buildings = await query<BuildingRow>(
         `SELECT
+          id,
           osm_id,
           osm_type,
           ST_AsGeoJSON(geometry) as geometry,
@@ -143,6 +145,7 @@ export async function buildingsRoutes(fastify: FastifyInstance) {
             id: `${b.osm_type}/${b.osm_id}`,
             geometry,
             properties: {
+              id: b.id,
               osm_id: b.osm_id,
               ...addressInfo,
             },
