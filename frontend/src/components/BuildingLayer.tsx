@@ -123,8 +123,8 @@ function BuildingLayerComponent({
         lon = center.lng;
       }
 
-      // Get building ID for actions (use 0 as fallback for valid JS)
-      const buildingId = selectedBuilding.properties?.osm_id ?? 0;
+      // Get internal building ID for actions (use 0 as fallback for valid JS)
+      const buildingId = selectedBuilding.properties?.id ?? 0;
 
       // Create popup with correction options
       const popup = L.popup({ maxWidth: 280 })

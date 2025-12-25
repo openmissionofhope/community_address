@@ -385,6 +385,19 @@ body {
     font-size: 15px;
   }
 
+  .header-right {
+    gap: 8px;
+  }
+
+  .header-right .disclaimer {
+    display: none;
+  }
+
+  .login-btn, .user-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
   .map-container {
     top: 44px;
   }
