@@ -245,7 +245,7 @@ export async function accessRoutes(fastify: FastifyInstance) {
    */
   fastify.get<{ Params: { building_id: string } }>(
     '/access/addresses/:building_id',
-    async (request, reply) => {
+    async (request, _reply) => {
       const { building_id } = request.params;
       const buildingIdNum = parseInt(building_id);
 

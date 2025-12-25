@@ -104,7 +104,7 @@ export async function usersRoutes(fastify: FastifyInstance) {
    */
   fastify.get<{ Params: { id: string } }>(
     '/users/:id/contributions',
-    async (request, reply) => {
+    async (request, _reply) => {
       const { id } = request.params;
 
       const claims = await query<{ id: string; building_id: number; house_number: string; status: string; created_at: string }>(
