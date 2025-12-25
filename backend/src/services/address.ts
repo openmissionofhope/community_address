@@ -12,7 +12,7 @@
  * - Side determination uses cross product of road direction and building position
  */
 
-import { query, queryOne } from '../db/connection.js';
+import { queryOne } from '../db/connection.js';
 
 /** Spacing between consecutive house numbers on a street (multiples of 5) */
 const HOUSE_NUMBER_SPACING = 5;

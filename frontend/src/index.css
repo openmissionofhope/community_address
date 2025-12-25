@@ -27,23 +27,23 @@ body {
 
 /* Simplified address popup */
 .address-popup {
-  min-width: 160px;
+  min-width: 180px;
   text-align: center;
 }
 
 .address-popup .address-short {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
   color: #111827;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   word-break: break-word;
 }
 
 .address-popup .address-type {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 4px 12px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 500;
   margin-bottom: 10px;
 }
@@ -109,14 +109,14 @@ body {
 }
 
 .app-header h1 {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: #111827;
 }
 
 .app-header .disclaimer {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 12px;
   color: #9ca3af;
 }
 

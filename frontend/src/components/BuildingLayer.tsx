@@ -115,9 +115,9 @@ function BuildingLayerComponent({
       const popup = L.popup()
         .setLatLng([lat, lon])
         .setContent(`
-          <div style="padding:8px;min-width:150px">
-            <div style="font-weight:bold;font-size:14px">${shortAddress}</div>
-            <div style="color:${isOfficial ? 'green' : 'orange'};font-size:12px;margin:4px 0">
+          <div style="padding:12px;min-width:180px;text-align:center">
+            <div style="font-weight:600;font-size:20px;color:#111827;margin-bottom:8px">${shortAddress}</div>
+            <div style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:14px;font-weight:500;background:${isOfficial ? '#d1fae5' : '#fef3c7'};color:${isOfficial ? '#065f46' : '#92400e'}">
               ${isOfficial ? 'Official' : 'Community'}
             </div>
           </div>
