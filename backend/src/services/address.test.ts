@@ -66,14 +66,18 @@ describe('Address Service', () => {
     });
 
     it('should create new placeholder street when none exists', async () => {
-      mockQueryOne.mockResolvedValueOnce(null);
-      mockQuery.mockResolvedValueOnce([]);
+      // Upsert returns the created placeholder
+      mockQueryOne.mockResolvedValueOnce({
+        placeholder_id: 'KLA-3F9A00AB',
+        display_name: 'Community Placeholder KLA-3F9A00AB',
+        geometry: '{"type":"LineString","coordinates":[[32.5815,0.347],[32.5815,0.349]]}',
+      });
 
       const result = await getOrCreatePlaceholderStreet({ lon: 32.5814, lat: 0.3476 }, 'KLA');
 
       expect(result.placeholder_id).toMatch(/^KLA-[0-9A-F]+$/);
       expect(result.display_name).toContain('Community Placeholder');
-      expect(mockQuery).toHaveBeenCalledTimes(1);
+      expect(mockQueryOne).toHaveBeenCalledTimes(1);
     });
   });
 
