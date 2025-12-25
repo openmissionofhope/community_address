@@ -17,6 +17,15 @@ interface RegionsQuery {
 }
 
 /**
+ * Query parameters for the regions GeoJSON endpoint.
+ * @interface RegionsGeoJsonQuery
+ */
+interface RegionsGeoJsonQuery {
+  country?: string;
+  level?: string;
+}
+
+/**
  * Database row structure for region queries.
  * @interface RegionRow
  */
@@ -120,4 +129,108 @@ export async function regionsRoutes(fastify: FastifyInstance) {
       })),
     };
   });
+
+  /**
+   * GET /regions/geojson
+   * Retrieves regions as GeoJSON FeatureCollection for map display.
+   * Creates circular boundaries from region centroids.
+   *
+   * @queryParam {string} [country='UG'] - Country code to filter regions
+   * @queryParam {string} [level='1'] - Level to return (1=regions, 2=subregions)
+   * @returns {Object} GeoJSON FeatureCollection with region polygons
+   */
+  fastify.get<{ Querystring: RegionsGeoJsonQuery }>(
+    '/regions/geojson',
+    async (request, _reply) => {
+      const { country = 'UG', level = '1' } = request.query;
+      const levelNum = parseInt(level);
+
+      interface RegionGeoRow {
+        code: string;
+        name: string;
+        level: number;
+        parent_code: string | null;
+        centroid_lon: number;
+        centroid_lat: number;
+        geometry_json: string | null;
+      }
+
+      // Default radius in km based on level
+      const radiusKm = levelNum === 1 ? 40 : 15;
+
+      const regions = await query<RegionGeoRow>(
+        `SELECT
+          r.code,
+          r.name,
+          r.level,
+          r.parent_code,
+          ST_X(r.centroid) as centroid_lon,
+          ST_Y(r.centroid) as centroid_lat,
+          CASE
+            WHEN r.geometry IS NOT NULL THEN ST_AsGeoJSON(r.geometry)
+            ELSE NULL
+          END as geometry_json
+        FROM regions r
+        WHERE r.level = $1
+          AND (
+            r.parent_code = $2
+            OR EXISTS (
+              SELECT 1 FROM regions p
+              WHERE p.code = r.parent_code
+              AND p.parent_code = $2
+            )
+          )
+        ORDER BY r.name`,
+        [levelNum, country]
+      );
+
+      // Create circular polygon from centroid
+      const createCircle = (lon: number, lat: number, radiusKm: number): number[][][] => {
+        const coords: number[][] = [];
+        const numPoints = 32;
+        // Convert km to degrees (approximate)
+        const radiusDeg = radiusKm / (111 * Math.cos((lat * Math.PI) / 180));
+
+        for (let i = 0; i <= numPoints; i++) {
+          const angle = (2 * Math.PI * i) / numPoints;
+          coords.push([
+            Math.round((lon + radiusDeg * Math.cos(angle)) * 1000000) / 1000000,
+            Math.round((lat + radiusDeg * Math.sin(angle) * 0.9) * 1000000) / 1000000,
+          ]);
+        }
+        return [coords];
+      };
+
+      const features = regions
+        .filter((r) => r.centroid_lon && r.centroid_lat)
+        .map((r) => {
+          let geometry;
+          if (r.geometry_json) {
+            geometry = JSON.parse(r.geometry_json);
+          } else {
+            geometry = {
+              type: 'Polygon',
+              coordinates: createCircle(r.centroid_lon, r.centroid_lat, radiusKm),
+            };
+          }
+
+          return {
+            type: 'Feature',
+            id: r.code,
+            properties: {
+              code: r.code,
+              name: r.name,
+              level: r.level,
+              parent_code: r.parent_code,
+            },
+            geometry,
+          };
+        });
+
+      return {
+        type: 'FeatureCollection',
+        features,
+      };
+    }
+  );
 }

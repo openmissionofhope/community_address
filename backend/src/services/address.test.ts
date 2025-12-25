@@ -50,33 +50,40 @@ describe('Address Service', () => {
   });
 
   describe('getOrCreatePlaceholderStreet', () => {
-    it('should return existing placeholder street', async () => {
+    it('should return existing placeholder street with new format', async () => {
       const existingPlaceholder = {
-        placeholder_id: 'KLA-3F9A00AC',
-        display_name: 'Community Placeholder KLA-3F9A00AC',
+        placeholder_id: 'KAM-C-105',
+        display_name: 'C-105',
+        region_code: 'KAM',
+        subregion_code: 'C',
         geometry: '{"type":"LineString","coordinates":[[32.58,0.34],[32.58,0.35]]}',
       };
 
       mockQueryOne.mockResolvedValueOnce(existingPlaceholder);
 
-      const result = await getOrCreatePlaceholderStreet({ lon: 32.5814, lat: 0.3476 }, 'KLA');
+      const result = await getOrCreatePlaceholderStreet({ lon: 32.5814, lat: 0.3476 });
 
       expect(result).toEqual(existingPlaceholder);
       expect(mockQuery).not.toHaveBeenCalled();
     });
 
-    it('should create new placeholder street when none exists', async () => {
-      // Upsert returns the created placeholder
+    it('should create new placeholder street with subregion-number format', async () => {
+      // Upsert returns the created placeholder with new format
       mockQueryOne.mockResolvedValueOnce({
-        placeholder_id: 'KLA-3F9A00AB',
-        display_name: 'Community Placeholder KLA-3F9A00AB',
+        placeholder_id: 'KAM-C-99005',
+        display_name: 'C-99005',
+        region_code: 'KAM',
+        subregion_code: 'C',
         geometry: '{"type":"LineString","coordinates":[[32.5815,0.347],[32.5815,0.349]]}',
       });
 
-      const result = await getOrCreatePlaceholderStreet({ lon: 32.5814, lat: 0.3476 }, 'KLA');
+      const result = await getOrCreatePlaceholderStreet({ lon: 32.5814, lat: 0.3476 });
 
-      expect(result.placeholder_id).toMatch(/^KLA-[0-9A-F]+$/);
-      expect(result.display_name).toContain('Community Placeholder');
+      // New format: <REGION>-<SUBREGION>-<NUMBER>
+      expect(result.placeholder_id).toMatch(/^[A-Z]{3}-[A-Z]{1,2}-\d+$/);
+      // Display name is just subregion-number
+      expect(result.display_name).toMatch(/^[A-Z]{1,2}-\d+$/);
+      expect(result.region_code).toBe('KAM');
       expect(mockQueryOne).toHaveBeenCalledTimes(1);
     });
   });
@@ -202,8 +209,9 @@ describe('Address Service', () => {
       expect(result.street_source).toBe('osm');
       expect(result.street_name).toBe('Kampala Road');
       expect(result.street_id).toBe('123456');
-      expect(result.algorithm_version).toBe('v2.0');
-      expect(result.full_address).toContain('[Unofficial / Community Address]');
+      expect(result.algorithm_version).toBe('v3.0');
+      // Format: <HOUSE_NUMBER> <STREET_NAME>, <REGION_NAME>, Uganda
+      expect(result.full_address).toContain('Kampala Road, Kampala, Uganda');
       // Position 0.3, left side: (30 * 2 + 1) * 5 = 305
       expect(result.house_number).toBe(305);
     });
@@ -216,18 +224,26 @@ describe('Address Service', () => {
         distance_m: 150,
       };
 
+      // Return placeholder with new format
+      const mockPlaceholder = {
+        placeholder_id: 'KAM-C-99005',
+        display_name: 'C-99005',
+        region_code: 'KAM',
+        subregion_code: 'C',
+        geometry: '{"type":"LineString","coordinates":[[32.58,0.34],[32.58,0.35]]}',
+      };
+
       mockQueryOne
         .mockResolvedValueOnce(mockStreet)         // findNearestOsmStreet (too far)
-        .mockResolvedValueOnce(null)               // getOrCreatePlaceholderStreet check
+        .mockResolvedValueOnce(mockPlaceholder)    // getOrCreatePlaceholderStreet upsert
         .mockResolvedValueOnce({ position: 0.5 })  // calculateHouseNumber position
         .mockResolvedValueOnce({ side: -1 });      // determineSideOfStreet (right)
-
-      mockQuery.mockResolvedValueOnce([]);         // getOrCreatePlaceholderStreet insert
 
       const result = await assignCommunityAddress({ lon: 32.5814, lat: 0.3476 });
 
       expect(result.street_source).toBe('placeholder');
-      expect(result.street_name).toContain('Community Placeholder');
+      // New format: <SUBREGION>-<NUMBER> (e.g., "C-99005")
+      expect(result.street_name).toMatch(/^[A-Z]{1,2}-\d+$/);
       // Position 0.5, right side: (50 * 2 + 2) * 5 = 510
       expect(result.house_number).toBe(510);
     });

@@ -49,3 +49,47 @@ export interface SuggestionPayload {
   suggested_value?: string;
   contact_info?: string;
 }
+
+export interface RegionFeature {
+  type: 'Feature';
+  id: string;
+  geometry: {
+    type: 'Polygon' | 'MultiPolygon';
+    coordinates: number[][][] | number[][][][];
+  };
+  properties: {
+    code: string;
+    name: string;
+    level: number;
+    parent_code: string | null;
+  };
+}
+
+export interface RegionCollection {
+  type: 'FeatureCollection';
+  features: RegionFeature[];
+}
+
+export interface PlaceholderStreetFeature {
+  type: 'Feature';
+  id: string;
+  geometry: {
+    type: 'LineString';
+    coordinates: number[][];
+  };
+  properties: {
+    id: string;
+    name: string;
+    region: string;
+    centroid: [number, number];
+  };
+}
+
+export interface PlaceholderStreetCollection {
+  type: 'FeatureCollection';
+  features: PlaceholderStreetFeature[];
+  metadata: {
+    bbox: [number, number, number, number];
+    total: number;
+  };
+}
