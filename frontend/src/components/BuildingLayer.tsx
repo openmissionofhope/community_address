@@ -19,20 +19,16 @@ interface BuildingLayerProps {
   bounds: LatLngBounds;
   onBuildingClick: (building: BuildingFeature) => void;
   selectedBuilding: BuildingFeature | null;
-  onCopyAddress: () => void;
-  onShareAddress: () => void;
 }
 
 /**
  * Renders buildings on the map as interactive GeoJSON polygons.
- * Simplified popup shows short address with copy/share buttons.
+ * Shows address popup when a building is selected.
  */
 function BuildingLayerComponent({
   bounds,
   onBuildingClick,
   selectedBuilding,
-  onCopyAddress,
-  onShareAddress,
 }: BuildingLayerProps) {
   const [buildings, setBuildings] = useState<BuildingCollection | null>(null);
   const [loading, setLoading] = useState(false);
@@ -72,75 +68,78 @@ function BuildingLayerComponent({
 
   // Show popup for selected building
   useEffect(() => {
-    if (selectedBuilding && map) {
-      // Close existing popup
-      if (popupRef.current) {
-        map.closePopup(popupRef.current);
-      }
-
-      const addr = selectedBuilding.properties.address;
-      const isOfficial = selectedBuilding.properties.address_type === 'official';
-
-      const popupContent = document.createElement('div');
-      popupContent.className = 'address-popup';
-      popupContent.innerHTML = `
-        <div class="address-short">${addr.house_number} ${addr.street}</div>
-        <span class="address-type ${selectedBuilding.properties.address_type}">
-          ${isOfficial ? 'Official' : 'Community'}
-        </span>
-        <div class="actions">
-          <button class="copy-btn">Copy</button>
-          <button class="share-btn">Share</button>
-        </div>
-      `;
-
-      // Add event listeners
-      const copyBtn = popupContent.querySelector('.copy-btn');
-      const shareBtn = popupContent.querySelector('.share-btn');
-      if (copyBtn) copyBtn.addEventListener('click', onCopyAddress);
-      if (shareBtn) shareBtn.addEventListener('click', onShareAddress);
-
-      // Calculate centroid
-      let lat = 0, lon = 0, count = 0;
-      try {
-        const coords = selectedBuilding.geometry.coordinates;
-        const geoType = selectedBuilding.geometry.type;
-
-        let ring: number[][];
-        if (geoType === 'MultiPolygon') {
-          ring = (coords as number[][][][])[0][0];
-        } else {
-          ring = (coords as number[][][])[0];
-        }
-
-        for (const point of ring) {
-          if (Array.isArray(point) && point.length >= 2) {
-            lon += point[0];
-            lat += point[1];
-            count++;
-          }
-        }
-      } catch (e) {
-        console.error('Failed to calculate centroid:', e);
-      }
-
-      if (count > 0) {
-        const popup = L.popup()
-          .setLatLng([lat / count, lon / count])
-          .setContent(popupContent)
-          .openOn(map);
-
-        popupRef.current = popup;
-      }
+    if (!selectedBuilding || !map) {
+      return;
     }
 
-    return () => {
+    try {
+      // Close existing popup
       if (popupRef.current) {
         map.closePopup(popupRef.current);
         popupRef.current = null;
       }
+
+      // Get address safely
+      const addr = selectedBuilding.properties?.address;
+      const houseNum = addr?.house_number ?? '';
+      const street = addr?.street ?? '';
+      const shortAddress = `${houseNum} ${street}`.trim() || 'Address';
+      const isOfficial = selectedBuilding.properties?.address_type === 'official';
+
+      // Get centroid from geometry
+      let lat = 0, lon = 0;
+      try {
+        const coords = selectedBuilding.geometry?.coordinates;
+        if (coords && Array.isArray(coords) && coords.length > 0) {
+          const ring = selectedBuilding.geometry?.type === 'MultiPolygon'
+            ? (coords as number[][][][])[0]?.[0]
+            : (coords as number[][][])[0];
+          if (ring && ring.length > 0 && Array.isArray(ring[0]) && ring[0].length >= 2) {
+            lon = ring[0][0];
+            lat = ring[0][1];
+          }
+        }
+      } catch {
+        const center = map.getCenter();
+        lat = center.lat;
+        lon = center.lng;
+      }
+
+      if (lat === 0 && lon === 0) {
+        const center = map.getCenter();
+        lat = center.lat;
+        lon = center.lng;
+      }
+
+      // Create popup
+      const popup = L.popup()
+        .setLatLng([lat, lon])
+        .setContent(`
+          <div style="padding:12px;min-width:180px;text-align:center">
+            <div style="font-weight:600;font-size:20px;color:#111827;margin-bottom:8px">${shortAddress}</div>
+            <div style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:14px;font-weight:500;background:${isOfficial ? '#d1fae5' : '#fef3c7'};color:${isOfficial ? '#065f46' : '#92400e'}">
+              ${isOfficial ? 'Official' : 'Community'}
+            </div>
+          </div>
+        `)
+        .openOn(map);
+
+      popupRef.current = popup;
+    } catch (err) {
+      console.error('Popup error:', err);
+    }
+
+    return () => {
+      try {
+        if (popupRef.current) {
+          map.closePopup(popupRef.current);
+          popupRef.current = null;
+        }
+      } catch {
+        // ignore cleanup errors
+      }
     };
-  }, [selectedBuilding, map, onCopyAddress, onShareAddress]);
+  }, [selectedBuilding, map]);
 
   const onEachFeature = useCallback(
     (feature: BuildingFeature, layer: Layer) => {
@@ -159,7 +158,7 @@ function BuildingLayerComponent({
       if (!feature) return {};
 
       const isSelected = selectedBuilding?.id === feature.id;
-      const isOfficial = feature.properties.address_type === 'official';
+      const isOfficial = feature.properties?.address_type === 'official';
 
       return {
         fillColor: isOfficial ? '#22c55e' : '#f59e0b',
