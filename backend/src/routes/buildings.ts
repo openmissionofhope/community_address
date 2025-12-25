@@ -18,7 +18,6 @@ const bboxSchema = z.string().regex(/^-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\
  */
 interface BboxQuery {
   bbox: string;
-  limit?: string;
   include_official?: string;
 }
 
@@ -52,14 +51,13 @@ export async function buildingsRoutes(fastify: FastifyInstance) {
    * Buildings without official addresses will have community addresses generated.
    *
    * @queryParam {string} bbox - Bounding box as "minLon,minLat,maxLon,maxLat"
-   * @queryParam {string} [limit='500'] - Maximum number of buildings to return (max 2000)
    * @queryParam {string} [include_official='true'] - Whether to include buildings with official addresses
    * @returns {Object} GeoJSON FeatureCollection with building features
    */
   fastify.get<{ Querystring: BboxQuery }>(
     '/buildings',
     async (request, reply) => {
-      const { bbox, limit = '500', include_official = 'true' } = request.query;
+      const { bbox, include_official = 'true' } = request.query;
 
       if (!bbox) {
         return reply.status(400).send({ error: 'bbox parameter is required' });
@@ -71,7 +69,6 @@ export async function buildingsRoutes(fastify: FastifyInstance) {
       }
 
       const [minLon, minLat, maxLon, maxLat] = bbox.split(',').map(Number);
-      const limitNum = Math.min(parseInt(limit), 2000);
 
       interface BuildingRow {
         osm_id: number;
@@ -94,9 +91,8 @@ export async function buildingsRoutes(fastify: FastifyInstance) {
           addr_city
         FROM buildings
         WHERE geometry && ST_MakeEnvelope($1, $2, $3, $4, 4326)
-        ${include_official === 'false' ? 'AND addr_housenumber IS NULL' : ''}
-        LIMIT $5`,
-        [minLon, minLat, maxLon, maxLat, limitNum]
+        ${include_official === 'false' ? 'AND addr_housenumber IS NULL' : ''}`,
+        [minLon, minLat, maxLon, maxLat]
       );
 
       const features = await Promise.all(
