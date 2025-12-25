@@ -174,23 +174,16 @@ export async function getOrCreatePlaceholderStreet(
   const gridY = Math.floor(centroid.lat / GRID_SIZE);
 
   const placeholderId = `${regionCode}-${gridX.toString(16).toUpperCase().padStart(4, '0')}${gridY.toString(16).toUpperCase().padStart(4, '0')}`;
-
-  const existing = await queryOne<PlaceholderStreet>(
-    'SELECT placeholder_id, display_name, ST_AsGeoJSON(geometry) as geometry FROM placeholder_streets WHERE placeholder_id = $1',
-    [placeholderId]
-  );
-
-  if (existing) {
-    return existing;
-  }
-
   const displayName = `Community Placeholder ${placeholderId}`;
   const cellCenterX = (gridX + 0.5) * GRID_SIZE;
   const cellCenterY = (gridY + 0.5) * GRID_SIZE;
 
-  await query(
+  // Use upsert to handle concurrent requests safely
+  const result = await queryOne<PlaceholderStreet>(
     `INSERT INTO placeholder_streets (placeholder_id, geometry, display_name, region_code)
-     VALUES ($1, ST_GeomFromText($2, 4326), $3, $4)`,
+     VALUES ($1, ST_GeomFromText($2, 4326), $3, $4)
+     ON CONFLICT (placeholder_id) DO UPDATE SET placeholder_id = EXCLUDED.placeholder_id
+     RETURNING placeholder_id, display_name, ST_AsGeoJSON(geometry) as geometry`,
     [
       placeholderId,
       `LINESTRING(${cellCenterX} ${cellCenterY - GRID_SIZE / 2}, ${cellCenterX} ${cellCenterY + GRID_SIZE / 2})`,
@@ -199,6 +192,11 @@ export async function getOrCreatePlaceholderStreet(
     ]
   );
 
+  if (result) {
+    return result;
+  }
+
+  // Fallback: return without database (shouldn't happen)
   return {
     placeholder_id: placeholderId,
     display_name: displayName,

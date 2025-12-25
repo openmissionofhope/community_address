@@ -50,23 +50,33 @@ function getBuildingUrl(building: BuildingFeature): string {
  */
 function getBuildingCentroid(building: BuildingFeature): [number, number] {
   try {
-    let ring: number[][];
-    if (building.geometry.type === 'MultiPolygon') {
-      ring = (building.geometry.coordinates as number[][][][])[0][0];
-    } else {
-      ring = (building.geometry.coordinates as number[][][])[0];
-    }
-
-    if (!ring || ring.length === 0) {
+    const coords = building?.geometry?.coordinates;
+    if (!coords || !Array.isArray(coords) || coords.length === 0) {
       return [0, 0];
     }
 
-    let sumLat = 0, sumLon = 0;
-    for (const [lon, lat] of ring) {
-      sumLon += lon;
-      sumLat += lat;
+    let ring: number[][] | undefined;
+    if (building.geometry.type === 'MultiPolygon') {
+      const poly = (coords as number[][][][])[0];
+      ring = poly?.[0];
+    } else {
+      ring = (coords as number[][][])[0];
     }
-    return [sumLat / ring.length, sumLon / ring.length];
+
+    if (!ring || !Array.isArray(ring) || ring.length === 0) {
+      return [0, 0];
+    }
+
+    let sumLat = 0, sumLon = 0, count = 0;
+    for (const point of ring) {
+      if (Array.isArray(point) && point.length >= 2) {
+        sumLon += point[0];
+        sumLat += point[1];
+        count++;
+      }
+    }
+    if (count === 0) return [0, 0];
+    return [sumLat / count, sumLon / count];
   } catch {
     return [0, 0];
   }
@@ -142,8 +152,15 @@ export default function App() {
   // Update URL hash when building is selected
   useEffect(() => {
     if (selectedBuilding) {
-      const url = getBuildingUrl(selectedBuilding);
-      window.history.replaceState(null, '', url.replace(window.location.origin, ''));
+      try {
+        const url = getBuildingUrl(selectedBuilding);
+        // Only update URL if we have a valid building ID (not null)
+        if (!url.includes('/null')) {
+          window.history.replaceState(null, '', url.replace(window.location.origin, ''));
+        }
+      } catch {
+        // Ignore URL update errors
+      }
     }
   }, [selectedBuilding]);
 
@@ -152,47 +169,8 @@ export default function App() {
   }, []);
 
   const handleBuildingClick = useCallback((building: BuildingFeature) => {
-    console.log('[App] handleBuildingClick called:', building.id);
     setSelectedBuilding(building);
   }, []);
-
-  const handleCopyAddress = useCallback(() => {
-    if (selectedBuilding) {
-      // Copy short address (house number + street)
-      const addr = selectedBuilding.properties.address;
-      const shortAddr = `${addr.house_number} ${addr.street}`;
-      navigator.clipboard.writeText(shortAddr);
-      setToast('Address copied');
-      setTimeout(() => setToast(null), 2000);
-    }
-  }, [selectedBuilding]);
-
-  const handleShareAddress = useCallback(async () => {
-    if (selectedBuilding) {
-      const url = getBuildingUrl(selectedBuilding);
-      const addr = selectedBuilding.properties.address;
-      const shortAddr = `${addr.house_number} ${addr.street}`;
-
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: 'Community Address',
-            text: shortAddr,
-            url: url,
-          });
-        } catch {
-          // User cancelled or share failed - fall back to copy
-          navigator.clipboard.writeText(url);
-          setToast('Link copied');
-          setTimeout(() => setToast(null), 2000);
-        }
-      } else {
-        navigator.clipboard.writeText(url);
-        setToast('Link copied');
-        setTimeout(() => setToast(null), 2000);
-      }
-    }
-  }, [selectedBuilding]);
 
   const handleLinkedBuildingLoaded = useCallback(() => {
     setLinkedBuilding(null);
@@ -223,8 +201,6 @@ export default function App() {
               bounds={bounds}
               onBuildingClick={handleBuildingClick}
               selectedBuilding={selectedBuilding}
-              onCopyAddress={handleCopyAddress}
-              onShareAddress={handleShareAddress}
             />
           )}
         </MapContainer>

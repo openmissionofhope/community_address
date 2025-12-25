@@ -133,10 +133,19 @@ export async function buildingsRoutes(fastify: FastifyInstance) {
             };
           }
 
+          // Convert MultiPolygon to Polygon for simpler frontend handling
+          let geometry = JSON.parse(b.geometry);
+          if (geometry.type === 'MultiPolygon' && geometry.coordinates?.length === 1) {
+            geometry = {
+              type: 'Polygon',
+              coordinates: geometry.coordinates[0],
+            };
+          }
+
           return {
             type: 'Feature',
             id: `${b.osm_type}/${b.osm_id}`,
-            geometry: JSON.parse(b.geometry),
+            geometry,
             properties: {
               osm_id: b.osm_id,
               ...addressInfo,

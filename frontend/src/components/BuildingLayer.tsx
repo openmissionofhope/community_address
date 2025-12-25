@@ -11,7 +11,6 @@ import type { LatLngBounds, Layer, LeafletMouseEvent } from 'leaflet';
 import L from 'leaflet';
 import type { BuildingFeature, BuildingCollection } from '../types';
 import { fetchBuildings } from '../services/api';
-import { getBuildingDisplayInfo, getBuildingCentroid } from '../utils/building';
 
 /**
  * Props for the BuildingLayer component.
@@ -20,38 +19,26 @@ interface BuildingLayerProps {
   bounds: LatLngBounds;
   onBuildingClick: (building: BuildingFeature) => void;
   selectedBuilding: BuildingFeature | null;
-  onCopyAddress: () => void;
-  onShareAddress: () => void;
 }
 
 /**
  * Renders buildings on the map as interactive GeoJSON polygons.
- * Simplified popup shows short address with copy/share buttons.
+ * Shows address popup when a building is selected.
  */
 function BuildingLayerComponent({
   bounds,
   onBuildingClick,
   selectedBuilding,
-  onCopyAddress,
-  onShareAddress,
 }: BuildingLayerProps) {
   const [buildings, setBuildings] = useState<BuildingCollection | null>(null);
   const [loading, setLoading] = useState(false);
   const map = useMap();
   const popupRef = useRef<L.Popup | null>(null);
 
-  // Store callbacks in refs to avoid effect re-runs
-  const callbacksRef = useRef({ onCopyAddress, onShareAddress });
-  useEffect(() => {
-    callbacksRef.current = { onCopyAddress, onShareAddress };
-  }, [onCopyAddress, onShareAddress]);
-
   const loadBuildings = useCallback(async () => {
     const zoom = map.getZoom();
-    console.log('[BuildingLayer] loadBuildings called, zoom:', zoom);
     // Only load buildings at zoom level 15+
     if (zoom < 15) {
-      console.log('[BuildingLayer] Zoom too low, clearing buildings');
       setBuildings(null);
       return;
     }
@@ -63,14 +50,12 @@ function BuildingLayerComponent({
       bounds.getNorth(),
     ];
 
-    console.log('[BuildingLayer] Fetching buildings for bbox:', bbox);
     setLoading(true);
     try {
       const data = await fetchBuildings(bbox);
-      console.log('[BuildingLayer] Received', data.features.length, 'buildings');
       setBuildings(data);
     } catch (error) {
-      console.error('[BuildingLayer] Failed to load buildings:', error);
+      console.error('Failed to load buildings:', error);
     } finally {
       setLoading(false);
     }
@@ -83,83 +68,83 @@ function BuildingLayerComponent({
 
   // Show popup for selected building
   useEffect(() => {
-    console.log('[BuildingLayer] Popup effect triggered, selectedBuilding:', selectedBuilding?.id);
-    // Early return if no building or map
     if (!selectedBuilding || !map) {
-      console.log('[BuildingLayer] No building or map, returning');
       return;
     }
 
-    // Close existing popup
-    if (popupRef.current) {
-      console.log('[BuildingLayer] Closing existing popup');
-      map.closePopup(popupRef.current);
-      popupRef.current = null;
-    }
-
-    // Safely get building info using tested utility
-    const displayInfo = getBuildingDisplayInfo(selectedBuilding);
-    console.log('[BuildingLayer] Display info:', displayInfo);
-    if (!displayInfo) {
-      console.error('[BuildingLayer] Invalid building data:', selectedBuilding);
-      return;
-    }
-
-    // Safely get centroid using tested utility
-    const centroid = getBuildingCentroid(selectedBuilding);
-    console.log('[BuildingLayer] Centroid:', centroid);
-    if (!centroid) {
-      console.error('[BuildingLayer] Could not calculate centroid:', selectedBuilding.geometry);
-      return;
-    }
-
-    // Create popup content
-    const popupContent = document.createElement('div');
-    popupContent.className = 'address-popup';
-    popupContent.innerHTML = `
-      <div class="address-short">${displayInfo.shortAddress}</div>
-      <span class="address-type ${displayInfo.addressType}">
-        ${displayInfo.isOfficial ? 'Official' : 'Community'}
-      </span>
-      <div class="actions">
-        <button class="copy-btn">Copy</button>
-        <button class="share-btn">Share</button>
-      </div>
-    `;
-
-    // Add event listeners using refs to avoid stale closures
-    const copyBtn = popupContent.querySelector('.copy-btn');
-    const shareBtn = popupContent.querySelector('.share-btn');
-    if (copyBtn) {
-      copyBtn.addEventListener('click', () => callbacksRef.current.onCopyAddress());
-    }
-    if (shareBtn) {
-      shareBtn.addEventListener('click', () => callbacksRef.current.onShareAddress());
-    }
-
-    // Create and open popup
-    const popup = L.popup()
-      .setLatLng([centroid.lat, centroid.lon])
-      .setContent(popupContent)
-      .openOn(map);
-
-    popupRef.current = popup;
-
-    // Cleanup function
-    return () => {
+    try {
+      // Close existing popup
       if (popupRef.current) {
         map.closePopup(popupRef.current);
         popupRef.current = null;
+      }
+
+      // Get address safely
+      const addr = selectedBuilding.properties?.address;
+      const houseNum = addr?.house_number ?? '';
+      const street = addr?.street ?? '';
+      const shortAddress = `${houseNum} ${street}`.trim() || 'Address';
+      const isOfficial = selectedBuilding.properties?.address_type === 'official';
+
+      // Get centroid from geometry
+      let lat = 0, lon = 0;
+      try {
+        const coords = selectedBuilding.geometry?.coordinates;
+        if (coords && Array.isArray(coords) && coords.length > 0) {
+          const ring = selectedBuilding.geometry?.type === 'MultiPolygon'
+            ? (coords as number[][][][])[0]?.[0]
+            : (coords as number[][][])[0];
+          if (ring && ring.length > 0 && Array.isArray(ring[0]) && ring[0].length >= 2) {
+            lon = ring[0][0];
+            lat = ring[0][1];
+          }
+        }
+      } catch {
+        const center = map.getCenter();
+        lat = center.lat;
+        lon = center.lng;
+      }
+
+      if (lat === 0 && lon === 0) {
+        const center = map.getCenter();
+        lat = center.lat;
+        lon = center.lng;
+      }
+
+      // Create popup
+      const popup = L.popup()
+        .setLatLng([lat, lon])
+        .setContent(`
+          <div style="padding:8px;min-width:150px">
+            <div style="font-weight:bold;font-size:14px">${shortAddress}</div>
+            <div style="color:${isOfficial ? 'green' : 'orange'};font-size:12px;margin:4px 0">
+              ${isOfficial ? 'Official' : 'Community'}
+            </div>
+          </div>
+        `)
+        .openOn(map);
+
+      popupRef.current = popup;
+    } catch (err) {
+      console.error('Popup error:', err);
+    }
+
+    return () => {
+      try {
+        if (popupRef.current) {
+          map.closePopup(popupRef.current);
+          popupRef.current = null;
+        }
+      } catch {
+        // ignore cleanup errors
       }
     };
   }, [selectedBuilding, map]);
 
   const onEachFeature = useCallback(
     (feature: BuildingFeature, layer: Layer) => {
-      console.log('[BuildingLayer] Attaching click handler to feature:', feature.id);
       layer.on({
         click: (e: LeafletMouseEvent) => {
-          console.log('[BuildingLayer] Building clicked:', feature.id, feature.properties?.address);
           L.DomEvent.stopPropagation(e);
           onBuildingClick(feature);
         },
