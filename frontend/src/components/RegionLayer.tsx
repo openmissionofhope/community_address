@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState, useCallback, memo } from 'react';
-import { GeoJSON, useMap, Tooltip } from 'react-leaflet';
+import { GeoJSON, useMap } from 'react-leaflet';
 import type { Layer } from 'leaflet';
 import L from 'leaflet';
 import type { RegionFeature, RegionCollection } from '../types';
@@ -24,21 +24,17 @@ interface RegionLayerProps {
  */
 function RegionLayerComponent({ country = 'UG' }: RegionLayerProps) {
   const [regions, setRegions] = useState<RegionCollection | null>(null);
-  const [loading, setLoading] = useState(false);
   const [visible, setVisible] = useState(true);
   const map = useMap();
 
   // Load regions on mount
   useEffect(() => {
     const loadRegions = async () => {
-      setLoading(true);
       try {
         const data = await fetchRegionsGeoJson(country, 1);
         setRegions(data);
       } catch (error) {
         console.error('Failed to load regions:', error);
-      } finally {
-        setLoading(false);
       }
     };
     loadRegions();

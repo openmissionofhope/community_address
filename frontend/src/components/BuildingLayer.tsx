@@ -83,8 +83,15 @@ function BuildingLayerComponent({
       const addr = selectedBuilding.properties?.address;
       const houseNum = addr?.house_number ?? '';
       const street = addr?.street ?? '';
-      const shortAddress = `${houseNum} ${street}`.trim() || 'Address';
+      const fullAddress = addr?.full ?? '';
       const isOfficial = selectedBuilding.properties?.address_type === 'official';
+
+      // Extract region/country from full address (after street name)
+      const streetPart = `${houseNum} ${street}`.trim();
+      const locationPart = fullAddress.replace(streetPart, '').replace(/^,\s*/, '');
+
+      // Color for street name: green for official, orange for community
+      const streetColor = isOfficial ? '#16a34a' : '#d97706';
 
       // Get centroid from geometry
       let lat = 0, lon = 0;
@@ -116,7 +123,11 @@ function BuildingLayerComponent({
         .setLatLng([lat, lon])
         .setContent(`
           <div style="padding:12px;min-width:180px;text-align:center">
-            <div style="font-weight:600;font-size:20px;color:#111827;margin-bottom:8px">${shortAddress}</div>
+            <div style="font-weight:600;font-size:20px;margin-bottom:4px">
+              <span style="color:#111827">${houseNum}</span>
+              <span style="color:${streetColor}">${street ? ' ' + street : ''}</span>
+            </div>
+            ${locationPart ? `<div style="font-size:16px;color:#6b7280;margin-bottom:8px">${locationPart}</div>` : ''}
             <div style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:14px;font-weight:500;background:${isOfficial ? '#d1fae5' : '#fef3c7'};color:${isOfficial ? '#065f46' : '#92400e'}">
               ${isOfficial ? 'Official' : 'Community'}
             </div>

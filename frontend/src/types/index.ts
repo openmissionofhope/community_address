@@ -69,3 +69,27 @@ export interface RegionCollection {
   type: 'FeatureCollection';
   features: RegionFeature[];
 }
+
+export interface PlaceholderStreetFeature {
+  type: 'Feature';
+  id: string;
+  geometry: {
+    type: 'LineString';
+    coordinates: number[][];
+  };
+  properties: {
+    id: string;
+    name: string;
+    region: string;
+    centroid: [number, number];
+  };
+}
+
+export interface PlaceholderStreetCollection {
+  type: 'FeatureCollection';
+  features: PlaceholderStreetFeature[];
+  metadata: {
+    bbox: [number, number, number, number];
+    total: number;
+  };
+}

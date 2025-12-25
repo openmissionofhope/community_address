@@ -24,7 +24,153 @@ const MAX_STREET_DISTANCE_METERS = 100;
 const GRID_SIZE = 0.002;
 
 /** Current version of the address assignment algorithm */
-const ALGORITHM_VERSION = 'v2.0';
+const ALGORITHM_VERSION = 'v3.0';
+
+/**
+ * Country configuration for the addressing system.
+ */
+const COUNTRY = {
+  name: 'Uganda',
+  code: 'UG',
+};
+
+/**
+ * Regions based on major population centers.
+ * Each region has a 3-letter code, center coordinates, and radius.
+ */
+const REGIONS: Record<string, { name: string; center: [number, number]; radius_km: number }> = {
+  KAM: { name: 'Kampala', center: [32.5825, 0.3476], radius_km: 35 },
+  JIN: { name: 'Jinja', center: [33.2041, 0.4244], radius_km: 40 },
+  MBA: { name: 'Mbarara', center: [30.6545, -0.6072], radius_km: 50 },
+  GUL: { name: 'Gulu', center: [32.2997, 2.7747], radius_km: 55 },
+  ARU: { name: 'Arua', center: [30.9110, 3.0303], radius_km: 50 },
+  MBL: { name: 'Mbale', center: [34.1750, 1.0821], radius_km: 45 },
+  LIR: { name: 'Lira', center: [32.5400, 2.2347], radius_km: 50 },
+  FTP: { name: 'Fort Portal', center: [30.2750, 0.6710], radius_km: 45 },
+  MSK: { name: 'Masaka', center: [31.7350, -0.3136], radius_km: 40 },
+  SOR: { name: 'Soroti', center: [33.6173, 1.7147], radius_km: 45 },
+  HMA: { name: 'Hoima', center: [31.3522, 1.4331], radius_km: 50 },
+  KBL: { name: 'Kabale', center: [29.9833, -1.2500], radius_km: 40 },
+};
+
+/**
+ * Subregion codes (directional) for each region.
+ * C=Central, N=North, S=South, E=East, W=West, NW/NE/SW/SE for diagonals.
+ */
+type SubregionCode = 'C' | 'N' | 'S' | 'E' | 'W' | 'NW' | 'NE' | 'SW' | 'SE';
+
+/**
+ * Calculates the distance between two coordinates in kilometers.
+ * Uses the Haversine formula for accuracy.
+ */
+function haversineDistance(
+  lon1: number,
+  lat1: number,
+  lon2: number,
+  lat2: number
+): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Determines the region code for a given coordinate.
+ * Returns the closest region if within any region's radius, otherwise defaults to nearest.
+ */
+function determineRegion(lon: number, lat: number): string {
+  let closestRegion = 'KAM';
+  let closestDistance = Infinity;
+
+  for (const [code, info] of Object.entries(REGIONS)) {
+    const distance = haversineDistance(lon, lat, info.center[0], info.center[1]);
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestRegion = code;
+    }
+  }
+
+  return closestRegion;
+}
+
+/**
+ * Determines the subregion code based on position relative to region center.
+ * Uses 8 directional zones plus central zone.
+ */
+function determineSubregion(
+  lon: number,
+  lat: number,
+  regionCode: string
+): SubregionCode {
+  const region = REGIONS[regionCode];
+  if (!region) return 'C';
+
+  const [centerLon, centerLat] = region.center;
+  const dLon = lon - centerLon;
+  const dLat = lat - centerLat;
+
+  // Calculate distance from center as fraction of region radius
+  const distanceKm = haversineDistance(lon, lat, centerLon, centerLat);
+  const distanceFraction = distanceKm / region.radius_km;
+
+  // If within 30% of center, it's Central
+  if (distanceFraction < 0.3) {
+    return 'C';
+  }
+
+  // Determine direction based on angle
+  const angle = Math.atan2(dLat, dLon) * (180 / Math.PI);
+
+  // Map angle to subregion (angle 0 = East, 90 = North, etc.)
+  if (angle >= -22.5 && angle < 22.5) return 'E';
+  if (angle >= 22.5 && angle < 67.5) return 'NE';
+  if (angle >= 67.5 && angle < 112.5) return 'N';
+  if (angle >= 112.5 && angle < 157.5) return 'NW';
+  if (angle >= 157.5 || angle < -157.5) return 'W';
+  if (angle >= -157.5 && angle < -112.5) return 'SW';
+  if (angle >= -112.5 && angle < -67.5) return 'S';
+  if (angle >= -67.5 && angle < -22.5) return 'SE';
+
+  return 'C';
+}
+
+/**
+ * Generates a street number for a placeholder street.
+ * Numbers are multiples of 5, with no leading zeros.
+ * The number is deterministic based on grid position within the subregion.
+ */
+function generateStreetNumber(
+  lon: number,
+  lat: number,
+  regionCode: string,
+  _subregionCode: SubregionCode
+): number {
+  const region = REGIONS[regionCode];
+  if (!region) return 100;
+
+  const [centerLon, centerLat] = region.center;
+
+  // Create a grid within the subregion
+  // Each subregion can have up to ~20,000 streets (100-99995 in multiples of 5)
+  const gridX = Math.floor((lon - centerLon + 2) * 1000) % 200;
+  const gridY = Math.floor((lat - centerLat + 2) * 1000) % 100;
+
+  // Generate a base number from grid position (1-19999)
+  const baseNumber = gridX * 100 + gridY + 1;
+
+  // Convert to multiple of 5 and ensure minimum of 100
+  const streetNumber = Math.max(100, baseNumber * 5);
+
+  return streetNumber;
+}
 
 /**
  * Represents a geographic coordinate point.
@@ -152,43 +298,52 @@ export async function findNearestOsmStreet(
 
 /**
  * Gets or creates a placeholder street for buildings not near any named OSM street.
- * Placeholder streets are virtual streets based on a grid system, ensuring
- * consistent addressing within geographic cells.
+ * Uses the new Uganda addressing system with format: <SUBREGION>-<STREET_NUMBER>
  *
  * @param {Coordinate} centroid - The building's geographic center point
- * @param {string} regionCode - The region code to include in the placeholder ID (e.g., 'KLA')
- * @returns {Promise<PlaceholderStreet>} The existing or newly created placeholder street
+ * @returns {Promise<PlaceholderStreet & { region_code: string; subregion_code: string }>}
+ *          The existing or newly created placeholder street with region info
  *
  * @example
- * const placeholder = await getOrCreatePlaceholderStreet(
- *   { lon: 32.5814, lat: 0.3476 },
- *   'KLA'
- * );
- * // Returns: { placeholder_id: 'KLA-3F9A00AB', display_name: 'Community Placeholder KLA-3F9A00AB', ... }
+ * const placeholder = await getOrCreatePlaceholderStreet({ lon: 32.5814, lat: 0.3476 });
+ * // Returns: { placeholder_id: 'KAM-C-105', display_name: 'C-105', region_code: 'KAM', ... }
  */
 export async function getOrCreatePlaceholderStreet(
-  centroid: Coordinate,
-  regionCode: string
-): Promise<PlaceholderStreet> {
+  centroid: Coordinate
+): Promise<PlaceholderStreet & { region_code: string; subregion_code: string }> {
+  // Determine region and subregion from coordinates
+  const regionCode = determineRegion(centroid.lon, centroid.lat);
+  const subregionCode = determineSubregion(centroid.lon, centroid.lat, regionCode);
+
+  // Generate street number based on position
+  const streetNumber = generateStreetNumber(
+    centroid.lon,
+    centroid.lat,
+    regionCode,
+    subregionCode
+  );
+
+  // New format: <SUBREGION>-<STREET_NUMBER> (e.g., "C-105", "N-1320")
+  const displayName = `${subregionCode}-${streetNumber}`;
+  const placeholderId = `${regionCode}-${displayName}`;
+
   const gridX = Math.floor(centroid.lon / GRID_SIZE);
   const gridY = Math.floor(centroid.lat / GRID_SIZE);
-
-  const placeholderId = `${regionCode}-${gridX.toString(16).toUpperCase().padStart(4, '0')}${gridY.toString(16).toUpperCase().padStart(4, '0')}`;
-  const displayName = `Community Placeholder ${placeholderId}`;
   const cellCenterX = (gridX + 0.5) * GRID_SIZE;
   const cellCenterY = (gridY + 0.5) * GRID_SIZE;
 
   // Use upsert to handle concurrent requests safely
-  const result = await queryOne<PlaceholderStreet>(
-    `INSERT INTO placeholder_streets (placeholder_id, geometry, display_name, region_code)
-     VALUES ($1, ST_GeomFromText($2, 4326), $3, $4)
+  const result = await queryOne<PlaceholderStreet & { region_code: string; subregion_code: string }>(
+    `INSERT INTO placeholder_streets (placeholder_id, geometry, display_name, region_code, subregion_code)
+     VALUES ($1, ST_GeomFromText($2, 4326), $3, $4, $5)
      ON CONFLICT (placeholder_id) DO UPDATE SET placeholder_id = EXCLUDED.placeholder_id
-     RETURNING placeholder_id, display_name, ST_AsGeoJSON(geometry) as geometry`,
+     RETURNING placeholder_id, display_name, ST_AsGeoJSON(geometry) as geometry, region_code, $5::text as subregion_code`,
     [
       placeholderId,
       `LINESTRING(${cellCenterX} ${cellCenterY - GRID_SIZE / 2}, ${cellCenterX} ${cellCenterY + GRID_SIZE / 2})`,
       displayName,
       regionCode,
+      subregionCode,
     ]
   );
 
@@ -200,6 +355,8 @@ export async function getOrCreatePlaceholderStreet(
   return {
     placeholder_id: placeholderId,
     display_name: displayName,
+    region_code: regionCode,
+    subregion_code: subregionCode,
     geometry: JSON.stringify({
       type: 'LineString',
       coordinates: [
@@ -320,38 +477,40 @@ export async function calculateHouseNumber(
 
 /**
  * Assigns a community address to a building that lacks an official address.
- * This is the main entry point for the address assignment algorithm.
+ * Uses the Uganda community addressing system.
  *
  * Algorithm steps:
- * 1. Find the nearest named OSM street within MAX_STREET_DISTANCE_METERS
- * 2. If no street found, create/get a placeholder street based on grid cell
- * 3. Determine which side of the road the building is on (left or right)
- * 4. Calculate a deterministic house number based on position and side:
+ * 1. Determine region and subregion from coordinates
+ * 2. Find the nearest named OSM street within MAX_STREET_DISTANCE_METERS
+ * 3. If no street found, create/get a placeholder street with format: <SUBREGION>-<NUMBER>
+ * 4. Determine which side of the road the building is on (left or right)
+ * 5. Calculate a deterministic house number based on position and side:
  *    - Left side: odd multiples of 5 (5, 15, 25, ...)
  *    - Right side: even multiples of 5 (10, 20, 30, ...)
- * 5. Format and return the complete address
+ * 6. Format and return the complete address in Uganda format
  *
  * @param {Coordinate} buildingCentroid - The building's geographic center point
- * @param {string} [regionCode='KLA'] - Region code for placeholder street naming
  * @returns {Promise<CommunityAddress>} The generated community address
  *
  * @example
- * // Building on left side of road, 30% along the street
+ * // Building in central Kampala with no nearby named street
  * const address = await assignCommunityAddress({ lon: 32.5814, lat: 0.3476 });
  * console.log(address.full_address);
- * // Output: "305 Kampala Road [Unofficial / Community Address]" (left side, odd)
+ * // Output: "15 C-105, KAM, Uganda"
  *
  * @example
- * // Building on right side of road, 30% along the street
+ * // Building near a named OSM street
  * const address = await assignCommunityAddress({ lon: 32.5820, lat: 0.3470 });
  * console.log(address.full_address);
- * // Output: "310 Kampala Road [Unofficial / Community Address]" (right side, even)
+ * // Output: "310 Kampala Road, KAM, Uganda"
  */
 export async function assignCommunityAddress(
-  buildingCentroid: Coordinate,
-  regionCode: string = 'KLA'
+  buildingCentroid: Coordinate
 ): Promise<CommunityAddress> {
-  // Step 1: Find nearest OSM street
+  // Step 1: Determine region from coordinates
+  const regionCode = determineRegion(buildingCentroid.lon, buildingCentroid.lat);
+
+  // Step 2: Find nearest OSM street
   const street = await findNearestOsmStreet(buildingCentroid);
 
   let streetName: string;
@@ -365,25 +524,24 @@ export async function assignCommunityAddress(
     streetId = street.osm_id.toString();
     streetGeometry = street.geometry;
   } else {
-    // Step 2: Get or create placeholder street
-    const placeholder = await getOrCreatePlaceholderStreet(
-      buildingCentroid,
-      regionCode
-    );
+    // Step 3: Get or create placeholder street with new format
+    const placeholder = await getOrCreatePlaceholderStreet(buildingCentroid);
     streetName = placeholder.display_name;
     streetSource = 'placeholder';
     streetId = placeholder.placeholder_id;
     streetGeometry = placeholder.geometry;
   }
 
-  // Step 3: Calculate house number
+  // Step 4: Calculate house number
   const houseNumber = await calculateHouseNumber(
     buildingCentroid,
     streetGeometry
   );
 
-  // Step 4: Format address
-  const fullAddress = `${houseNumber} ${streetName} [Unofficial / Community Address]`;
+  // Step 5: Format address in community format
+  // Format: <HOUSE_NUMBER> <STREET_NAME>, <REGION_NAME>, <COUNTRY>
+  const regionName = REGIONS[regionCode]?.name ?? regionCode;
+  const fullAddress = `${houseNumber} ${streetName}, ${regionName}, ${COUNTRY.name}`;
 
   return {
     house_number: houseNumber,
@@ -469,7 +627,7 @@ export async function getBuildingWithAddress(
     };
   }
 
-  // Generate community address
+  // Generate community address using Uganda addressing system
   const centroid = JSON.parse(building.centroid);
   const coords: Coordinate = {
     lon: centroid.coordinates[0],

@@ -4,7 +4,7 @@
  * All functions handle errors by throwing descriptive Error objects.
  */
 
-import type { BuildingCollection, BuildingFeature, Region, RegionCollection, SuggestionPayload } from '../types';
+import type { BuildingCollection, BuildingFeature, Region, RegionCollection, SuggestionPayload, PlaceholderStreetCollection } from '../types';
 
 /** Base URL for all API requests */
 const API_BASE = '/api';
@@ -163,6 +163,18 @@ export async function getOsmRedirect(
   });
   if (!response.ok) {
     throw new Error('Failed to get OSM redirect');
+  }
+  return response.json();
+}
+
+/**
+ * Fetches placeholder (community) streets within a bounding box.
+ */
+export async function fetchPlaceholderStreets(bbox: [number, number, number, number]): Promise<PlaceholderStreetCollection> {
+  const bboxStr = bbox.join(',');
+  const response = await fetch(`${API_BASE}/streets/placeholder?bbox=${bboxStr}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch placeholder streets');
   }
   return response.json();
 }
