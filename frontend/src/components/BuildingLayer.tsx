@@ -123,18 +123,29 @@ function BuildingLayerComponent({
         lon = center.lng;
       }
 
-      // Create popup
-      const popup = L.popup()
+      // Get building ID for actions (use 0 as fallback for valid JS)
+      const buildingId = selectedBuilding.properties?.osm_id ?? 0;
+
+      // Create popup with correction options
+      const popup = L.popup({ maxWidth: 280 })
         .setLatLng([lat, lon])
         .setContent(`
-          <div style="padding:12px;min-width:180px;text-align:center">
+          <div style="padding:12px;min-width:200px;text-align:center">
             <div style="font-weight:600;font-size:20px;margin-bottom:4px">
               <span style="color:${numberColor}">${houseNum}</span>
               <span style="color:${streetColor}">${street ? ' ' + street : ''}</span>
             </div>
             ${locationPart ? `<div style="font-size:16px;color:#6b7280;margin-bottom:8px">${locationPart}</div>` : ''}
-            <div style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:14px;font-weight:500;background:${isOfficial ? '#d1fae5' : '#fef3c7'};color:${isOfficial ? '#065f46' : '#92400e'}">
+            <div style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:14px;font-weight:500;margin-bottom:12px;background:${isOfficial ? '#d1fae5' : '#fef3c7'};color:${isOfficial ? '#065f46' : '#92400e'}">
               ${isOfficial ? 'Official' : 'Community'}
+            </div>
+            <div style="border-top:1px solid #e5e7eb;padding-top:12px;display:flex;gap:8px;justify-content:center">
+              <button onclick="window.dispatchEvent(new CustomEvent('addNote', {detail:{buildingId:${buildingId}}}))" style="padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px">
+                Add note
+              </button>
+              <button onclick="window.dispatchEvent(new CustomEvent('suggestCorrection', {detail:{buildingId:${buildingId}}}))" style="padding:6px 12px;border:none;border-radius:6px;background:#3b82f6;color:#fff;cursor:pointer;font-size:13px">
+                Suggest correction
+              </button>
             </div>
           </div>
         `)

@@ -13,6 +13,7 @@ import 'leaflet/dist/leaflet.css';
 import { BuildingLayer } from './components/BuildingLayer';
 import { RegionLayer } from './components/RegionLayer';
 import { Toast } from './components/Toast';
+import { NoteModal } from './components/NoteModal';
 import { fetchBuilding } from './services/api';
 import type { BuildingFeature } from './types';
 
@@ -135,6 +136,28 @@ export default function App() {
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingFeature | null>(null);
   const [linkedBuilding, setLinkedBuilding] = useState<BuildingFeature | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [noteModalBuildingId, setNoteModalBuildingId] = useState<number | null>(null);
+
+  // Listen for custom events from popup buttons
+  useEffect(() => {
+    const handleAddNote = (e: CustomEvent<{ buildingId: number }>) => {
+      setNoteModalBuildingId(e.detail.buildingId);
+    };
+
+    const handleSuggestCorrection = () => {
+      // For now, show a toast - correction modal can be added later
+      setToast('Correction feature coming soon!');
+      setTimeout(() => setToast(null), 3000);
+    };
+
+    window.addEventListener('addNote', handleAddNote as EventListener);
+    window.addEventListener('suggestCorrection', handleSuggestCorrection as EventListener);
+
+    return () => {
+      window.removeEventListener('addNote', handleAddNote as EventListener);
+      window.removeEventListener('suggestCorrection', handleSuggestCorrection as EventListener);
+    };
+  }, []);
 
   // Load building from URL hash on mount
   useEffect(() => {
@@ -215,6 +238,17 @@ export default function App() {
       </div>
 
       {toast && <Toast message={toast} />}
+
+      {noteModalBuildingId && (
+        <NoteModal
+          buildingId={noteModalBuildingId}
+          onClose={() => setNoteModalBuildingId(null)}
+          onSuccess={() => {
+            setToast('Note added successfully!');
+            setTimeout(() => setToast(null), 3000);
+          }}
+        />
+      )}
     </div>
   );
 }

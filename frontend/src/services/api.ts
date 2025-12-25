@@ -178,3 +178,168 @@ export async function fetchPlaceholderStreets(bbox: [number, number, number, num
   }
   return response.json();
 }
+
+// ==================== ADDRESS CLAIMS ====================
+
+export interface AddressClaim {
+  id: string;
+  building_id: number;
+  road_id: number;
+  road_type: 'osm' | 'placeholder';
+  house_number: string;
+  street_name?: string;
+  source: 'osm' | 'community' | 'official_reported';
+  access_type: 'primary' | 'alternative' | 'historical';
+  affirmation_count: number;
+  rejection_count: number;
+  status: 'pending' | 'accepted' | 'disputed' | 'decayed';
+  created_at: string;
+}
+
+export interface AccessNote {
+  id: string;
+  building_id: number;
+  note: string;
+  affirmation_count: number;
+  created_at: string;
+  decay_at: string;
+}
+
+export interface BuildingAddresses {
+  addresses: {
+    address_type: string;
+    house_number: string;
+    street_name: string;
+    source: string;
+    access_type: string;
+    confidence: number;
+  }[];
+  notes: AccessNote[];
+  points: { id: string; lon: number; lat: number; access_note: string | null }[];
+}
+
+/**
+ * Fetches all addresses for a building (official + claims).
+ */
+export async function fetchBuildingAddresses(buildingId: number): Promise<BuildingAddresses> {
+  const response = await fetch(`${API_BASE}/access/addresses/${buildingId}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch building addresses');
+  }
+  return response.json();
+}
+
+/**
+ * Fetches address claims for a building.
+ */
+export async function fetchClaims(buildingId: number): Promise<{ claims: AddressClaim[] }> {
+  const response = await fetch(`${API_BASE}/claims?building_id=${buildingId}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch claims');
+  }
+  return response.json();
+}
+
+/**
+ * Submits a new address claim.
+ */
+export async function submitClaim(claim: {
+  building_id: number;
+  road_id: number;
+  road_type: 'osm' | 'placeholder';
+  house_number: string;
+  source?: 'community' | 'official_reported';
+  access_type?: 'primary' | 'alternative' | 'historical';
+  user_id?: string;
+}): Promise<AddressClaim> {
+  const response = await fetch(`${API_BASE}/claims`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(claim),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to submit claim');
+  }
+  return response.json();
+}
+
+/**
+ * Votes on an address claim.
+ */
+export async function voteClaim(claimId: string, userId: string, vote: 'affirm' | 'reject'): Promise<void> {
+  const response = await fetch(`${API_BASE}/claims/${claimId}/vote`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, vote }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to vote on claim');
+  }
+}
+
+/**
+ * Fetches access notes for a building.
+ */
+export async function fetchAccessNotes(buildingId: number): Promise<{ notes: AccessNote[] }> {
+  const response = await fetch(`${API_BASE}/access/notes?building_id=${buildingId}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch access notes');
+  }
+  return response.json();
+}
+
+/**
+ * Submits a new access note.
+ */
+export async function submitAccessNote(note: {
+  building_id: number;
+  note: string;
+  user_id?: string;
+}): Promise<AccessNote> {
+  const response = await fetch(`${API_BASE}/access/notes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(note),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to submit access note');
+  }
+  return response.json();
+}
+
+/**
+ * Affirms an access note.
+ */
+export async function affirmAccessNote(noteId: string, userId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/access/notes/${noteId}/vote`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, vote: 'affirm' }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to affirm note');
+  }
+}
+
+// ==================== USERS ====================
+
+export interface User {
+  id: string;
+  trust_score: number;
+  contribution_count: number;
+}
+
+/**
+ * Creates or gets a user by phone number.
+ */
+export async function loginUser(phone: string): Promise<User & { is_new: boolean }> {
+  const response = await fetch(`${API_BASE}/users`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to login');
+  }
+  return response.json();
+}
