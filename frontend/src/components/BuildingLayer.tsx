@@ -10,7 +10,7 @@ import { GeoJSON, useMap } from 'react-leaflet';
 import type { LatLngBounds, Layer, LeafletMouseEvent } from 'leaflet';
 import L from 'leaflet';
 import type { BuildingFeature, BuildingCollection } from '../types';
-import { fetchBuildings } from '../services/api';
+import { fetchBuildings, fetchAccessNotes, AccessNote } from '../services/api';
 
 /**
  * Props for the BuildingLayer component.
@@ -32,8 +32,20 @@ function BuildingLayerComponent({
 }: BuildingLayerProps) {
   const [buildings, setBuildings] = useState<BuildingCollection | null>(null);
   const [loading, setLoading] = useState(false);
+  const [notes, setNotes] = useState<AccessNote[]>([]);
   const map = useMap();
   const popupRef = useRef<L.Popup | null>(null);
+
+  // Fetch notes when building is selected
+  useEffect(() => {
+    if (!selectedBuilding?.properties?.id) {
+      setNotes([]);
+      return;
+    }
+    fetchAccessNotes(selectedBuilding.properties.id)
+      .then((result) => setNotes(result.notes))
+      .catch(() => setNotes([]));
+  }, [selectedBuilding?.properties?.id]);
 
   const loadBuildings = useCallback(async () => {
     const zoom = map.getZoom();
@@ -126,11 +138,28 @@ function BuildingLayerComponent({
       // Get internal building ID for actions (use 0 as fallback for valid JS)
       const buildingId = selectedBuilding.properties?.id ?? 0;
 
+      // Build notes HTML
+      const notesHtml = notes.length > 0
+        ? `<div style="border-top:1px solid #e5e7eb;margin-top:12px;padding-top:12px;text-align:left">
+            <div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:8px">ACCESS NOTES</div>
+            ${notes.slice(0, 3).map(n => `
+              <div style="background:#f9fafb;padding:8px;border-radius:6px;margin-bottom:6px;font-size:13px">
+                <div style="color:#374151">${n.note}</div>
+                <div style="color:#9ca3af;font-size:11px;margin-top:4px">
+                  ${n.affirmation_count > 0 ? `+${n.affirmation_count}` : ''}
+                  <button onclick="window.dispatchEvent(new CustomEvent('affirmNote', {detail:{noteId:'${n.id}'}}))" style="margin-left:8px;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;font-size:11px">+1</button>
+                </div>
+              </div>
+            `).join('')}
+            ${notes.length > 3 ? `<div style="color:#6b7280;font-size:12px">+${notes.length - 3} more</div>` : ''}
+          </div>`
+        : '';
+
       // Create popup with correction options
-      const popup = L.popup({ maxWidth: 280 })
+      const popup = L.popup({ maxWidth: 300 })
         .setLatLng([lat, lon])
         .setContent(`
-          <div style="padding:12px;min-width:200px;text-align:center">
+          <div style="padding:12px;min-width:220px;text-align:center">
             <div style="font-weight:600;font-size:20px;margin-bottom:4px">
               <span style="color:${numberColor}">${houseNum}</span>
               <span style="color:${streetColor}">${street ? ' ' + street : ''}</span>
@@ -139,6 +168,7 @@ function BuildingLayerComponent({
             <div style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:14px;font-weight:500;margin-bottom:12px;background:${isOfficial ? '#d1fae5' : '#fef3c7'};color:${isOfficial ? '#065f46' : '#92400e'}">
               ${isOfficial ? 'Official' : 'Community'}
             </div>
+            ${notesHtml}
             <div style="border-top:1px solid #e5e7eb;padding-top:12px;display:flex;gap:8px;justify-content:center">
               <button onclick="window.dispatchEvent(new CustomEvent('addNote', {detail:{buildingId:${buildingId}}}))" style="padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px">
                 Add note
@@ -166,7 +196,7 @@ function BuildingLayerComponent({
         // ignore cleanup errors
       }
     };
-  }, [selectedBuilding, map]);
+  }, [selectedBuilding, map, notes]);
 
   const onEachFeature = useCallback(
     (feature: BuildingFeature, layer: Layer) => {

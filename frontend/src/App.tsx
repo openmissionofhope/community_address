@@ -17,7 +17,7 @@ import { NoteModal } from './components/NoteModal';
 import { CorrectionModal } from './components/CorrectionModal';
 import { AuthModal } from './components/AuthModal';
 import { UserProvider, useUser } from './context/UserContext';
-import { fetchBuilding } from './services/api';
+import { fetchBuilding, affirmAccessNote } from './services/api';
 import type { BuildingFeature } from './types';
 
 /** Default map center coordinates (Kampala, Uganda) */
@@ -135,7 +135,7 @@ function FlyToBuilding({ building, onComplete }: { building: BuildingFeature | n
  * Inner app content with access to user context.
  */
 function AppContent() {
-  const { user } = useUser();
+  const { user, logout } = useUser();
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingFeature | null>(null);
   const [linkedBuilding, setLinkedBuilding] = useState<BuildingFeature | null>(null);
@@ -165,14 +165,37 @@ function AppContent() {
       });
     };
 
-    window.addEventListener('addNote', handleAddNote as EventListener);
-    window.addEventListener('suggestCorrection', handleSuggestCorrection as EventListener);
+    const handleAffirmNote = async (e: CustomEvent<{ noteId: string }>) => {
+      if (!user) {
+        setShowAuthModal(true);
+        setToast('Sign in to affirm notes');
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
+      try {
+        await affirmAccessNote(e.detail.noteId, user.id);
+        setToast('Note affirmed!');
+        setTimeout(() => setToast(null), 2000);
+        // Re-select building to refresh notes
+        if (selectedBuilding) {
+          setSelectedBuilding({ ...selectedBuilding });
+        }
+      } catch {
+        setToast('Already affirmed or error occurred');
+        setTimeout(() => setToast(null), 3000);
+      }
+    };
+
+    window.addEventListener('addNote', handleAddNote as unknown as EventListener);
+    window.addEventListener('suggestCorrection', handleSuggestCorrection as unknown as EventListener);
+    window.addEventListener('affirmNote', handleAffirmNote as unknown as EventListener);
 
     return () => {
-      window.removeEventListener('addNote', handleAddNote as EventListener);
-      window.removeEventListener('suggestCorrection', handleSuggestCorrection as EventListener);
+      window.removeEventListener('addNote', handleAddNote as unknown as EventListener);
+      window.removeEventListener('suggestCorrection', handleSuggestCorrection as unknown as EventListener);
+      window.removeEventListener('affirmNote', handleAffirmNote as unknown as EventListener);
     };
-  }, [selectedBuilding]);
+  }, [selectedBuilding, user]);
 
   // Load building from URL hash on mount
   useEffect(() => {
@@ -228,9 +251,12 @@ function AppContent() {
         <div className="header-right">
           <span className="disclaimer">Unofficial addresses</span>
           {user ? (
-            <button className="user-btn" onClick={() => setShowAuthModal(true)}>
-              {user.contribution_count} contributions
-            </button>
+            <div className="user-info">
+              <span className="contribution-count">{user.contribution_count}</span>
+              <button className="logout-btn" onClick={logout}>
+                Sign out
+              </button>
+            </div>
           ) : (
             <button className="login-btn" onClick={() => setShowAuthModal(true)}>
               Sign in
