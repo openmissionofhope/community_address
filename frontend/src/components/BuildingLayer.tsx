@@ -10,7 +10,7 @@ import { GeoJSON, useMap } from 'react-leaflet';
 import type { LatLngBounds, Layer, LeafletMouseEvent } from 'leaflet';
 import L from 'leaflet';
 import type { BuildingFeature, BuildingCollection } from '../types';
-import { fetchBuildings, fetchAccessNotes, fetchClaims, AccessNote, AddressClaim } from '../services/api';
+import { fetchBuildings, fetchAccessNotes, fetchClaims, fetchAccessPoints, AccessNote, AddressClaim, AccessPoint } from '../services/api';
 
 /**
  * Formats time remaining until decay as a human-readable string.
@@ -54,14 +54,16 @@ function BuildingLayerComponent({
   const [loading, setLoading] = useState(false);
   const [notes, setNotes] = useState<AccessNote[]>([]);
   const [claims, setClaims] = useState<AddressClaim[]>([]);
+  const [accessPoints, setAccessPoints] = useState<AccessPoint[]>([]);
   const map = useMap();
   const popupRef = useRef<L.Popup | null>(null);
 
-  // Fetch notes and claims when building is selected
+  // Fetch notes, claims, and access points when building is selected
   useEffect(() => {
     if (!selectedBuilding?.properties?.id) {
       setNotes([]);
       setClaims([]);
+      setAccessPoints([]);
       return;
     }
     const buildingId = selectedBuilding.properties.id;
@@ -71,6 +73,9 @@ function BuildingLayerComponent({
     fetchClaims(buildingId)
       .then((result) => setClaims(result.claims))
       .catch(() => setClaims([]));
+    fetchAccessPoints(buildingId)
+      .then((result) => setAccessPoints(result.points))
+      .catch(() => setAccessPoints([]));
   }, [selectedBuilding?.properties?.id]);
 
   const loadBuildings = useCallback(async () => {
@@ -208,6 +213,23 @@ function BuildingLayerComponent({
           </div>`
         : '';
 
+      // Build access points HTML
+      const accessPointsHtml = accessPoints.length > 0
+        ? `<div style="border-top:1px solid #e5e7eb;margin-top:12px;padding-top:12px;text-align:left">
+            <div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:8px">ENTRANCES (${accessPoints.length})</div>
+            ${accessPoints.slice(0, 3).map(p => `
+              <div style="background:#f9fafb;padding:8px;border-radius:6px;margin-bottom:6px;font-size:13px">
+                <div style="color:#374151;display:flex;align-items:center;gap:4px">
+                  <span style="color:#2563eb">📍</span>
+                  ${p.access_note || 'Marked entrance'}
+                </div>
+                <div style="font-size:11px;color:#9ca3af;margin-top:2px">${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}</div>
+              </div>
+            `).join('')}
+            ${accessPoints.length > 3 ? `<div style="color:#6b7280;font-size:12px">+${accessPoints.length - 3} more</div>` : ''}
+          </div>`
+        : '';
+
       // Create popup with correction options
       const popup = L.popup({ maxWidth: 300 })
         .setLatLng([lat, lon])
@@ -223,9 +245,13 @@ function BuildingLayerComponent({
             </div>
             ${claimsHtml}
             ${notesHtml}
-            <div style="border-top:1px solid #e5e7eb;padding-top:12px;display:flex;gap:8px;justify-content:center">
+            ${accessPointsHtml}
+            <div style="border-top:1px solid #e5e7eb;padding-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
               <button onclick="window.dispatchEvent(new CustomEvent('addNote', {detail:{buildingId:${buildingId}}}))" style="padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px">
                 Add note
+              </button>
+              <button onclick="window.dispatchEvent(new CustomEvent('markEntrance', {detail:{buildingId:${buildingId}}}))" style="padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px">
+                Mark entrance
               </button>
               <button onclick="window.dispatchEvent(new CustomEvent('suggestCorrection', {detail:{buildingId:${buildingId}}}))" style="padding:6px 12px;border:none;border-radius:6px;background:#3b82f6;color:#fff;cursor:pointer;font-size:13px">
                 Suggest correction
@@ -250,7 +276,7 @@ function BuildingLayerComponent({
         // ignore cleanup errors
       }
     };
-  }, [selectedBuilding, map, notes, claims]);
+  }, [selectedBuilding, map, notes, claims, accessPoints]);
 
   const onEachFeature = useCallback(
     (feature: BuildingFeature, layer: Layer) => {

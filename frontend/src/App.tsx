@@ -15,6 +15,7 @@ import { RegionLayer } from './components/RegionLayer';
 import { Toast } from './components/Toast';
 import { NoteModal } from './components/NoteModal';
 import { CorrectionModal } from './components/CorrectionModal';
+import { EntranceModal } from './components/EntranceModal';
 import { AuthModal } from './components/AuthModal';
 import { UserProvider, useUser } from './context/UserContext';
 import { fetchBuilding, affirmAccessNote, voteClaim } from './services/api';
@@ -147,6 +148,7 @@ function AppContent() {
   } | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<'note' | 'correction' | null>(null);
+  const [entranceModalBuildingId, setEntranceModalBuildingId] = useState<number | null>(null);
 
   // Listen for custom events from popup buttons
   useEffect(() => {
@@ -207,16 +209,22 @@ function AppContent() {
       }
     };
 
+    const handleMarkEntrance = (e: CustomEvent<{ buildingId: number }>) => {
+      setEntranceModalBuildingId(e.detail.buildingId);
+    };
+
     window.addEventListener('addNote', handleAddNote as unknown as EventListener);
     window.addEventListener('suggestCorrection', handleSuggestCorrection as unknown as EventListener);
     window.addEventListener('affirmNote', handleAffirmNote as unknown as EventListener);
     window.addEventListener('voteClaim', handleVoteClaim as unknown as EventListener);
+    window.addEventListener('markEntrance', handleMarkEntrance as unknown as EventListener);
 
     return () => {
       window.removeEventListener('addNote', handleAddNote as unknown as EventListener);
       window.removeEventListener('suggestCorrection', handleSuggestCorrection as unknown as EventListener);
       window.removeEventListener('affirmNote', handleAffirmNote as unknown as EventListener);
       window.removeEventListener('voteClaim', handleVoteClaim as unknown as EventListener);
+      window.removeEventListener('markEntrance', handleMarkEntrance as unknown as EventListener);
     };
   }, [selectedBuilding, user]);
 
@@ -337,6 +345,21 @@ function AppContent() {
           onNeedAuth={() => {
             setPendingAction('correction');
             setShowAuthModal(true);
+          }}
+        />
+      )}
+
+      {entranceModalBuildingId && (
+        <EntranceModal
+          buildingId={entranceModalBuildingId}
+          onClose={() => setEntranceModalBuildingId(null)}
+          onSuccess={() => {
+            setToast('Entrance marked!');
+            setTimeout(() => setToast(null), 3000);
+            // Refresh building to show new entrance
+            if (selectedBuilding) {
+              setSelectedBuilding({ ...selectedBuilding });
+            }
           }}
         />
       )}
