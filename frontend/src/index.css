@@ -155,6 +155,37 @@ body {
   background: #e5e7eb;
 }
 
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.contribution-count {
+  background: #d1fae5;
+  color: #065f46;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.logout-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+}
+
+.logout-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
 /* Map container offset for header */
 .map-container {
   position: fixed;
@@ -175,6 +206,22 @@ body {
   border-radius: 16px;
   font-size: 13px;
   color: #6b7280;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 1000;
+}
+
+/* Error indicator */
+.error-indicator {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #dc2626;
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
   z-index: 1000;
 }
@@ -393,9 +440,18 @@ body {
     display: none;
   }
 
-  .login-btn, .user-btn {
+  .login-btn, .user-btn, .logout-btn {
     padding: 5px 10px;
     font-size: 12px;
+  }
+
+  .contribution-count {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  .user-info {
+    gap: 6px;
   }
 
   .map-container {

@@ -321,6 +321,48 @@ export async function affirmAccessNote(noteId: string, userId: string): Promise<
   }
 }
 
+// ==================== ACCESS POINTS ====================
+
+export interface AccessPoint {
+  id: string;
+  building_id: number;
+  lon: number;
+  lat: number;
+  access_note: string | null;
+  created_at: string;
+}
+
+/**
+ * Fetches access points for a building.
+ */
+export async function fetchAccessPoints(buildingId: number): Promise<{ points: AccessPoint[] }> {
+  const response = await fetch(`${API_BASE}/access/points?building_id=${buildingId}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch access points');
+  }
+  return response.json();
+}
+
+/**
+ * Submits a new access point for a building.
+ */
+export async function submitAccessPoint(data: {
+  building_id: number;
+  lon: number;
+  lat: number;
+  access_note?: string;
+}): Promise<AccessPoint> {
+  const response = await fetch(`${API_BASE}/access/points`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to submit access point');
+  }
+  return response.json();
+}
+
 // ==================== USERS ====================
 
 export interface User {
