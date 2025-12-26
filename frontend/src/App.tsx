@@ -17,7 +17,7 @@ import { NoteModal } from './components/NoteModal';
 import { CorrectionModal } from './components/CorrectionModal';
 import { AuthModal } from './components/AuthModal';
 import { UserProvider, useUser } from './context/UserContext';
-import { fetchBuilding, affirmAccessNote } from './services/api';
+import { fetchBuilding, affirmAccessNote, voteClaim } from './services/api';
 import type { BuildingFeature } from './types';
 
 /** Default map center coordinates (Kampala, Uganda) */
@@ -186,14 +186,37 @@ function AppContent() {
       }
     };
 
+    const handleVoteClaim = async (e: CustomEvent<{ claimId: string; vote: 'affirm' | 'reject' }>) => {
+      if (!user) {
+        setShowAuthModal(true);
+        setToast('Sign in to vote on claims');
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
+      try {
+        await voteClaim(e.detail.claimId, user.id, e.detail.vote);
+        setToast('Vote recorded!');
+        setTimeout(() => setToast(null), 2000);
+        // Re-select building to refresh claims
+        if (selectedBuilding) {
+          setSelectedBuilding({ ...selectedBuilding });
+        }
+      } catch {
+        setToast('Already voted or error occurred');
+        setTimeout(() => setToast(null), 3000);
+      }
+    };
+
     window.addEventListener('addNote', handleAddNote as unknown as EventListener);
     window.addEventListener('suggestCorrection', handleSuggestCorrection as unknown as EventListener);
     window.addEventListener('affirmNote', handleAffirmNote as unknown as EventListener);
+    window.addEventListener('voteClaim', handleVoteClaim as unknown as EventListener);
 
     return () => {
       window.removeEventListener('addNote', handleAddNote as unknown as EventListener);
       window.removeEventListener('suggestCorrection', handleSuggestCorrection as unknown as EventListener);
       window.removeEventListener('affirmNote', handleAffirmNote as unknown as EventListener);
+      window.removeEventListener('voteClaim', handleVoteClaim as unknown as EventListener);
     };
   }, [selectedBuilding, user]);
 

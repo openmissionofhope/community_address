@@ -10,7 +10,7 @@ import { GeoJSON, useMap } from 'react-leaflet';
 import type { LatLngBounds, Layer, LeafletMouseEvent } from 'leaflet';
 import L from 'leaflet';
 import type { BuildingFeature, BuildingCollection } from '../types';
-import { fetchBuildings, fetchAccessNotes, AccessNote } from '../services/api';
+import { fetchBuildings, fetchAccessNotes, fetchClaims, AccessNote, AddressClaim } from '../services/api';
 
 /**
  * Props for the BuildingLayer component.
@@ -33,18 +33,24 @@ function BuildingLayerComponent({
   const [buildings, setBuildings] = useState<BuildingCollection | null>(null);
   const [loading, setLoading] = useState(false);
   const [notes, setNotes] = useState<AccessNote[]>([]);
+  const [claims, setClaims] = useState<AddressClaim[]>([]);
   const map = useMap();
   const popupRef = useRef<L.Popup | null>(null);
 
-  // Fetch notes when building is selected
+  // Fetch notes and claims when building is selected
   useEffect(() => {
     if (!selectedBuilding?.properties?.id) {
       setNotes([]);
+      setClaims([]);
       return;
     }
-    fetchAccessNotes(selectedBuilding.properties.id)
+    const buildingId = selectedBuilding.properties.id;
+    fetchAccessNotes(buildingId)
       .then((result) => setNotes(result.notes))
       .catch(() => setNotes([]));
+    fetchClaims(buildingId)
+      .then((result) => setClaims(result.claims))
+      .catch(() => setClaims([]));
   }, [selectedBuilding?.properties?.id]);
 
   const loadBuildings = useCallback(async () => {
@@ -138,6 +144,28 @@ function BuildingLayerComponent({
       // Get internal building ID for actions (use 0 as fallback for valid JS)
       const buildingId = selectedBuilding.properties?.id ?? 0;
 
+      // Build claims HTML (alternative addresses)
+      const claimsHtml = claims.length > 0
+        ? `<div style="border-top:1px solid #e5e7eb;margin-top:12px;padding-top:12px;text-align:left">
+            <div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:8px">COMMUNITY ADDRESSES</div>
+            ${claims.slice(0, 3).map(c => {
+              const statusColor = c.status === 'accepted' ? '#16a34a' : (c.status === 'disputed' ? '#dc2626' : '#d97706');
+              const statusBg = c.status === 'accepted' ? '#d1fae5' : (c.status === 'disputed' ? '#fee2e2' : '#fef3c7');
+              return `
+              <div style="background:#f9fafb;padding:8px;border-radius:6px;margin-bottom:6px;font-size:13px">
+                <div style="color:#374151;font-weight:500">${c.house_number}${c.street_name ? ' ' + c.street_name : ''}</div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+                  <span style="font-size:11px;padding:2px 6px;border-radius:4px;background:${statusBg};color:${statusColor}">${c.status}</span>
+                  <span style="font-size:11px;color:#16a34a">+${c.affirmation_count}</span>
+                  <span style="font-size:11px;color:#dc2626">-${c.rejection_count}</span>
+                  <button onclick="window.dispatchEvent(new CustomEvent('voteClaim', {detail:{claimId:'${c.id}',vote:'affirm'}}))" style="padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;font-size:11px">+1</button>
+                </div>
+              </div>
+            `}).join('')}
+            ${claims.length > 3 ? `<div style="color:#6b7280;font-size:12px">+${claims.length - 3} more</div>` : ''}
+          </div>`
+        : '';
+
       // Build notes HTML
       const notesHtml = notes.length > 0
         ? `<div style="border-top:1px solid #e5e7eb;margin-top:12px;padding-top:12px;text-align:left">
@@ -168,6 +196,7 @@ function BuildingLayerComponent({
             <div style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:14px;font-weight:500;margin-bottom:12px;background:${isOfficial ? '#d1fae5' : '#fef3c7'};color:${isOfficial ? '#065f46' : '#92400e'}">
               ${isOfficial ? 'Official' : 'Community'}
             </div>
+            ${claimsHtml}
             ${notesHtml}
             <div style="border-top:1px solid #e5e7eb;padding-top:12px;display:flex;gap:8px;justify-content:center">
               <button onclick="window.dispatchEvent(new CustomEvent('addNote', {detail:{buildingId:${buildingId}}}))" style="padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px">
@@ -196,7 +225,7 @@ function BuildingLayerComponent({
         // ignore cleanup errors
       }
     };
-  }, [selectedBuilding, map, notes]);
+  }, [selectedBuilding, map, notes, claims]);
 
   const onEachFeature = useCallback(
     (feature: BuildingFeature, layer: Layer) => {
