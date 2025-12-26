@@ -52,6 +52,7 @@ function BuildingLayerComponent({
 }: BuildingLayerProps) {
   const [buildings, setBuildings] = useState<BuildingCollection | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<AccessNote[]>([]);
   const [claims, setClaims] = useState<AddressClaim[]>([]);
   const [accessPoints, setAccessPoints] = useState<AccessPoint[]>([]);
@@ -94,11 +95,14 @@ function BuildingLayerComponent({
     ];
 
     setLoading(true);
+    setError(null);
     try {
       const data = await fetchBuildings(bbox);
       setBuildings(data);
-    } catch (error) {
-      console.error('Failed to load buildings:', error);
+    } catch (err) {
+      console.error('Failed to load buildings:', err);
+      setError('Failed to load buildings. Check your connection.');
+      setBuildings(null);
     } finally {
       setLoading(false);
     }
@@ -307,20 +311,21 @@ function BuildingLayerComponent({
     [selectedBuilding]
   );
 
-  if (!buildings || buildings.features.length === 0) {
-    return null;
-  }
-
   return (
     <>
-      <GeoJSON
-        key={JSON.stringify(buildings.metadata.bbox)}
-        data={buildings as unknown as GeoJSON.GeoJsonObject}
-        style={getStyle as unknown as L.StyleFunction}
-        onEachFeature={onEachFeature as unknown as (feature: GeoJSON.Feature, layer: L.Layer) => void}
-      />
+      {buildings && buildings.features.length > 0 && (
+        <GeoJSON
+          key={JSON.stringify(buildings.metadata.bbox)}
+          data={buildings as unknown as GeoJSON.GeoJsonObject}
+          style={getStyle as unknown as L.StyleFunction}
+          onEachFeature={onEachFeature as unknown as (feature: GeoJSON.Feature, layer: L.Layer) => void}
+        />
+      )}
       {loading && (
-        <div className="loading-indicator">Loading...</div>
+        <div className="loading-indicator">Loading buildings...</div>
+      )}
+      {error && !loading && (
+        <div className="error-indicator">{error}</div>
       )}
     </>
   );
