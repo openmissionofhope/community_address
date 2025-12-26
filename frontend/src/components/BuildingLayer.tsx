@@ -13,6 +13,26 @@ import type { BuildingFeature, BuildingCollection } from '../types';
 import { fetchBuildings, fetchAccessNotes, fetchClaims, AccessNote, AddressClaim } from '../services/api';
 
 /**
+ * Formats time remaining until decay as a human-readable string.
+ */
+function formatTimeUntilDecay(decayAt: string): string {
+  const now = new Date().getTime();
+  const decay = new Date(decayAt).getTime();
+  const diff = decay - now;
+
+  if (diff <= 0) return 'Expired';
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+  if (days > 0) return `${days}d ${hours}h left`;
+  if (hours > 0) return `${hours}h left`;
+
+  const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  return `${mins}m left`;
+}
+
+/**
  * Props for the BuildingLayer component.
  */
 interface BuildingLayerProps {
@@ -166,19 +186,24 @@ function BuildingLayerComponent({
           </div>`
         : '';
 
-      // Build notes HTML
+      // Build notes HTML with expiry countdown
       const notesHtml = notes.length > 0
         ? `<div style="border-top:1px solid #e5e7eb;margin-top:12px;padding-top:12px;text-align:left">
             <div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:8px">ACCESS NOTES</div>
-            ${notes.slice(0, 3).map(n => `
-              <div style="background:#f9fafb;padding:8px;border-radius:6px;margin-bottom:6px;font-size:13px">
+            ${notes.slice(0, 3).map(n => {
+              const timeLeft = formatTimeUntilDecay(n.decay_at);
+              const isExpiring = timeLeft.includes('h left') || timeLeft.includes('m left');
+              const isExpired = timeLeft === 'Expired';
+              return `
+              <div style="background:#f9fafb;padding:8px;border-radius:6px;margin-bottom:6px;font-size:13px${isExpired ? ';opacity:0.5' : ''}">
                 <div style="color:#374151">${n.note}</div>
-                <div style="color:#9ca3af;font-size:11px;margin-top:4px">
-                  ${n.affirmation_count > 0 ? `+${n.affirmation_count}` : ''}
-                  <button onclick="window.dispatchEvent(new CustomEvent('affirmNote', {detail:{noteId:'${n.id}'}}))" style="margin-left:8px;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;font-size:11px">+1</button>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap">
+                  <span style="font-size:11px;color:${isExpired ? '#dc2626' : (isExpiring ? '#d97706' : '#6b7280')}">${timeLeft}</span>
+                  ${n.affirmation_count > 0 ? `<span style="font-size:11px;color:#16a34a">+${n.affirmation_count}</span>` : ''}
+                  ${!isExpired ? `<button onclick="window.dispatchEvent(new CustomEvent('affirmNote', {detail:{noteId:'${n.id}'}}))" style="padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;font-size:11px">+1</button>` : ''}
                 </div>
               </div>
-            `).join('')}
+            `}).join('')}
             ${notes.length > 3 ? `<div style="color:#6b7280;font-size:12px">+${notes.length - 3} more</div>` : ''}
           </div>`
         : '';
