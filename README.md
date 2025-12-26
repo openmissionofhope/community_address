@@ -8,7 +8,10 @@ This system helps humanitarian organizations and communities in low-infrastructu
 
 - **Community addresses** for buildings that lack official addresses
 - **Deterministic numbering** (10, 20, 30...) that allows infill
-- **Clear labeling** as "Unofficial / Community Address"
+- **Clear labeling** distinguishing official (green) vs community (orange) addresses
+- **Access notes** - crowdsourced directions like "Blue gate after MTN kiosk"
+- **Address claims** - community members can suggest corrections with voting
+- **Phone-based authentication** - lightweight sign-in for contributions
 - **Offline support** via PWA caching
 
 All addresses are explicitly temporary, reversible, and non-authoritative. OSM remains the source of truth for geometry and official addresses.
@@ -143,6 +146,65 @@ curl "http://localhost:3000/buildings?bbox=32.5,0.3,32.6,0.35"
 curl "http://localhost:3000/buildings/way/123456789"
 ```
 
+### Users & Authentication
+
+```bash
+# Register/login via phone number
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"phone": "+256700123456"}'
+
+# Get user profile
+curl "http://localhost:3000/users/{user_id}"
+
+# Get user contributions
+curl "http://localhost:3000/users/{user_id}/contributions"
+```
+
+### Address Claims
+
+```bash
+# Submit address claim
+curl -X POST http://localhost:3000/claims \
+  -H "Content-Type: application/json" \
+  -d '{
+    "building_id": 123,
+    "road_id": 1,
+    "road_type": "placeholder",
+    "house_number": "42",
+    "source": "community",
+    "user_id": "uuid"
+  }'
+
+# Get claims for a building
+curl "http://localhost:3000/claims?building_id=123"
+
+# Vote on a claim
+curl -X POST http://localhost:3000/claims/{claim_id}/vote \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "uuid", "vote": "affirm"}'
+```
+
+### Access Notes
+
+```bash
+# Add access note (directions to find a building)
+curl -X POST http://localhost:3000/access/notes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "building_id": 123,
+    "note": "Blue gate after MTN kiosk"
+  }'
+
+# Get notes for a building
+curl "http://localhost:3000/access/notes?building_id=123"
+
+# Affirm a note
+curl -X POST http://localhost:3000/access/notes/{note_id}/vote \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "uuid", "vote": "affirm"}'
+```
+
 ### Suggestions
 
 ```bash
@@ -220,17 +282,31 @@ community_address/
 │   └── src/
 │       ├── db/              # Database connection
 │       ├── routes/          # API endpoints
+│       │   ├── buildings.ts # Building queries
+│       │   ├── users.ts     # User auth
+│       │   ├── claims.ts    # Address claims
+│       │   ├── access.ts    # Access notes/points
+│       │   └── regions.ts   # Region data
 │       └── services/        # Address algorithm
 ├── frontend/                # React + Leaflet PWA
 │   └── src/
 │       ├── components/      # React components
+│       │   ├── BuildingLayer.tsx   # Map building layer
+│       │   ├── NoteModal.tsx       # Add access notes
+│       │   ├── CorrectionModal.tsx # Suggest corrections
+│       │   └── AuthModal.tsx       # Phone sign-in
+│       ├── context/         # React context (auth)
 │       ├── services/        # API client
 │       └── types/           # TypeScript types
 ├── database/
 │   ├── migrations/          # SQL schema
+│   │   ├── 001_initial.sql
+│   │   ├── 002_placeholder_streets.sql
+│   │   ├── 003_regions.sql
+│   │   └── 004_address_claims.sql  # Users, claims, notes, voting
 │   ├── import-osm.sh        # OSM import script
 │   ├── import-google-buildings.py  # Google Open Buildings import
-│   └── countries.json       # Country configurations (bounds, names)
+│   └── countries.json       # Country configurations
 ├── docs/
 │   └── ARCHITECTURE.md      # Technical design
 └── docker-compose.yml
