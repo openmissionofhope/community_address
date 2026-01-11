@@ -61,45 +61,47 @@ Services:
 - API: http://localhost:3000
 - Database: localhost:5432
 
-### Importing OSM Data
+### Database Setup
 
-Download an OSM extract for your region from [Geofabrik](https://download.geofabrik.de/):
+Before importing data, set up the database schema:
 
 ```bash
-# Download Uganda extract
-wget https://download.geofabrik.de/africa/uganda-latest.osm.pbf
+# Create database (if not using Docker)
+createdb community_address
+psql -d community_address -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+
+# Run migrations
+for f in database/migrations/*.sql; do
+  psql -d community_address -f "$f"
+done
+```
+
+### Importing Data
+
+The system supports two data sources for building footprints:
+
+**1. OpenStreetMap (required)** - Building footprints, streets, and official addresses:
+
+```bash
+# Download OSM extract
+wget https://download.geofabrik.de/africa/uganda-latest.osm.pbf -P data/
 
 # Import into database
-chmod +x database/import-osm.sh
-./database/import-osm.sh uganda-latest.osm.pbf
+./database/import-osm.sh data/uganda-latest.osm.pbf
 ```
 
-### Importing Google Open Buildings
-
-For more comprehensive building coverage, import [Google Open Buildings](https://sites.research.google/open-buildings/) data. This adds ML-detected buildings that may not be in OSM.
+**2. Google Open Buildings (optional)** - ML-detected buildings to fill gaps in OSM:
 
 ```bash
-cd database
-
-# Install dependencies
 pip install psycopg2-binary requests s2sphere
-
-# List supported countries (112 countries across Africa, Asia, Latin America)
-python import-google-buildings.py --list-countries
-
-# Import buildings for a specific country
-python import-google-buildings.py --country=UGA        # Uganda
-python import-google-buildings.py --country=KEN        # Kenya
-python import-google-buildings.py --country=IND        # India
-
-# Using environment variable
-COUNTRY_CODE=TZA python import-google-buildings.py     # Tanzania
-
-# Dry run (download only, no import)
-python import-google-buildings.py --country=UGA --dry-run
+python database/import-google-buildings.py --country=UGA
 ```
 
-Country configurations are stored in `database/countries.json`. To add a new country, add its ISO 3166-1 alpha-3 code and bounding box to the JSON file.
+See [docs/DATA_IMPORT.md](docs/DATA_IMPORT.md) for the complete data import guide, including:
+- Step-by-step database setup
+- All 112 supported countries for Google Buildings
+- Data refresh strategies
+- Troubleshooting tips
 
 ## Local Development
 
@@ -308,7 +310,8 @@ community_address/
 │   ├── import-google-buildings.py  # Google Open Buildings import
 │   └── countries.json       # Country configurations
 ├── docs/
-│   └── ARCHITECTURE.md      # Technical design
+│   ├── ARCHITECTURE.md      # Technical design
+│   └── DATA_IMPORT.md       # Database setup & data import guide
 └── docker-compose.yml
 ```
 
