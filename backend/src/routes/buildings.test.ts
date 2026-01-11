@@ -70,7 +70,7 @@ describe('Buildings Routes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/buildings?bbox=32.5,0.3,32.6,0.4',
+        url: '/buildings?bbox=32.55,0.32,32.60,0.37',
       });
 
       expect(response.statusCode).toBe(200);
