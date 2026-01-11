@@ -178,3 +178,6 @@ htmlcov/
 *.mo
 *.pot
 *.pyc
+
+# Vercel
+.vercel
