@@ -15,9 +15,10 @@ import { RegionLayer } from './components/RegionLayer';
 import { Toast } from './components/Toast';
 import { NoteModal } from './components/NoteModal';
 import { CorrectionModal } from './components/CorrectionModal';
+import { EntranceModal } from './components/EntranceModal';
 import { AuthModal } from './components/AuthModal';
 import { UserProvider, useUser } from './context/UserContext';
-import { fetchBuilding } from './services/api';
+import { fetchBuilding, affirmAccessNote, voteClaim } from './services/api';
 import type { BuildingFeature } from './types';
 
 /** Default map center coordinates (Kampala, Uganda) */
@@ -135,7 +136,7 @@ function FlyToBuilding({ building, onComplete }: { building: BuildingFeature | n
  * Inner app content with access to user context.
  */
 function AppContent() {
-  const { user } = useUser();
+  const { user, logout } = useUser();
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingFeature | null>(null);
   const [linkedBuilding, setLinkedBuilding] = useState<BuildingFeature | null>(null);
@@ -147,6 +148,7 @@ function AppContent() {
   } | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<'note' | 'correction' | null>(null);
+  const [entranceModalBuildingId, setEntranceModalBuildingId] = useState<number | null>(null);
 
   // Listen for custom events from popup buttons
   useEffect(() => {
@@ -165,14 +167,66 @@ function AppContent() {
       });
     };
 
-    window.addEventListener('addNote', handleAddNote as EventListener);
-    window.addEventListener('suggestCorrection', handleSuggestCorrection as EventListener);
+    const handleAffirmNote = async (e: CustomEvent<{ noteId: string }>) => {
+      if (!user) {
+        setShowAuthModal(true);
+        setToast('Sign in to affirm notes');
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
+      try {
+        await affirmAccessNote(e.detail.noteId, user.id);
+        setToast('Note affirmed!');
+        setTimeout(() => setToast(null), 2000);
+        // Re-select building to refresh notes
+        if (selectedBuilding) {
+          setSelectedBuilding({ ...selectedBuilding });
+        }
+      } catch {
+        setToast('Already affirmed or error occurred');
+        setTimeout(() => setToast(null), 3000);
+      }
+    };
+
+    const handleVoteClaim = async (e: CustomEvent<{ claimId: string; vote: 'affirm' | 'reject' }>) => {
+      if (!user) {
+        setShowAuthModal(true);
+        setToast('Sign in to vote on claims');
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
+      try {
+        await voteClaim(e.detail.claimId, user.id, e.detail.vote);
+        setToast('Vote recorded!');
+        setTimeout(() => setToast(null), 2000);
+        // Re-select building to refresh claims
+        if (selectedBuilding) {
+          setSelectedBuilding({ ...selectedBuilding });
+        }
+      } catch {
+        setToast('Already voted or error occurred');
+        setTimeout(() => setToast(null), 3000);
+      }
+    };
+
+    const handleMarkEntrance = (e: CustomEvent<{ buildingId: number }>) => {
+      setEntranceModalBuildingId(e.detail.buildingId);
+    };
+
+    window.addEventListener('addNote', handleAddNote as unknown as EventListener);
+    window.addEventListener('suggestCorrection', handleSuggestCorrection as unknown as EventListener);
+    window.addEventListener('affirmNote', handleAffirmNote as unknown as EventListener);
+    window.addEventListener('voteClaim', handleVoteClaim as unknown as EventListener);
+    window.addEventListener('markEntrance', handleMarkEntrance as unknown as EventListener);
 
     return () => {
-      window.removeEventListener('addNote', handleAddNote as EventListener);
-      window.removeEventListener('suggestCorrection', handleSuggestCorrection as EventListener);
+      window.removeEventListener('addNote', handleAddNote as unknown as EventListener);
+      window.removeEventListener('suggestCorrection', handleSuggestCorrection as unknown as EventListener);
+      window.removeEventListener('affirmNote', handleAffirmNote as unknown as EventListener);
+      window.removeEventListener('voteClaim', handleVoteClaim as unknown as EventListener);
+      window.removeEventListener('markEntrance', handleMarkEntrance as unknown as EventListener);
     };
-  }, [selectedBuilding]);
+  }, [selectedBuilding, user]);
 
   // Load building from URL hash on mount
   useEffect(() => {
@@ -228,9 +282,12 @@ function AppContent() {
         <div className="header-right">
           <span className="disclaimer">Unofficial addresses</span>
           {user ? (
-            <button className="user-btn" onClick={() => setShowAuthModal(true)}>
-              {user.contribution_count} contributions
-            </button>
+            <div className="user-info">
+              <span className="contribution-count">{user.contribution_count}</span>
+              <button className="logout-btn" onClick={logout}>
+                Sign out
+              </button>
+            </div>
           ) : (
             <button className="login-btn" onClick={() => setShowAuthModal(true)}>
               Sign in
@@ -288,6 +345,21 @@ function AppContent() {
           onNeedAuth={() => {
             setPendingAction('correction');
             setShowAuthModal(true);
+          }}
+        />
+      )}
+
+      {entranceModalBuildingId && (
+        <EntranceModal
+          buildingId={entranceModalBuildingId}
+          onClose={() => setEntranceModalBuildingId(null)}
+          onSuccess={() => {
+            setToast('Entrance marked!');
+            setTimeout(() => setToast(null), 3000);
+            // Refresh building to show new entrance
+            if (selectedBuilding) {
+              setSelectedBuilding({ ...selectedBuilding });
+            }
           }}
         />
       )}
