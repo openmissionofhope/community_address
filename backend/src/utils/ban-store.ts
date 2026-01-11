@@ -18,8 +18,35 @@ export const BAN_DURATION_MS = 15 * 60 * 1000;
 /** How long to remember violations (1 hour) */
 const VIOLATION_WINDOW_MS = 60 * 60 * 1000;
 
+/** Maximum number of tracked IPs to prevent memory exhaustion */
+const MAX_TRACKED_IPS = 10000;
+
 /** In-memory store for ban records */
 const banRecords = new Map<string, BanRecord>();
+
+/**
+ * Evict the oldest non-banned entry to make room for new entries.
+ * Called when the store is at capacity.
+ */
+function evictOldestEntry(): void {
+  const now = Date.now();
+  let oldestKey: string | null = null;
+  let oldestTime = Infinity;
+
+  for (const [key, record] of banRecords) {
+    // Don't evict currently banned IPs
+    if (record.bannedUntil && record.bannedUntil > now) continue;
+
+    if (record.lastViolation < oldestTime) {
+      oldestTime = record.lastViolation;
+      oldestKey = key;
+    }
+  }
+
+  if (oldestKey) {
+    banRecords.delete(oldestKey);
+  }
+}
 
 /**
  * Records a rate limit violation for an IP.
@@ -30,6 +57,11 @@ export function recordViolation(ip: string): boolean {
   const record = banRecords.get(ip);
 
   if (!record) {
+    // Size limit protection - evict oldest entry if at capacity
+    if (banRecords.size >= MAX_TRACKED_IPS) {
+      evictOldestEntry();
+    }
+
     banRecords.set(ip, {
       violations: 1,
       bannedUntil: null,
@@ -137,6 +169,8 @@ export function getBanStats(): {
   totalTracked: number;
   currentlyBanned: number;
   recentViolators: number;
+  atCapacity: boolean;
+  maxCapacity: number;
 } {
   const now = Date.now();
   let currentlyBanned = 0;
@@ -155,6 +189,8 @@ export function getBanStats(): {
     totalTracked: banRecords.size,
     currentlyBanned,
     recentViolators,
+    atCapacity: banRecords.size >= MAX_TRACKED_IPS,
+    maxCapacity: MAX_TRACKED_IPS,
   };
 }
 
