@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://api.communityaddresses.com/:path*"
+      "destination": "https://api.communityaddresses.org/:path*"
     }
   ]
 }
