@@ -30,7 +30,7 @@ export interface QueryOptions {
 }
 
 // Pool metrics tracking
-let poolMetrics: PoolMetrics = {
+const poolMetrics: PoolMetrics = {
   totalConnections: 0,
   idleConnections: 0,
   waitingClients: 0,

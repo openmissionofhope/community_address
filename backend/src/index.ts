@@ -11,11 +11,10 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { ZodError } from 'zod';
 
-import { loadConfig, getConfig } from './config.js';
+import { loadConfig } from './config.js';
 import {
   initializePool,
   healthCheck,
-  getPoolMetrics,
   closePool,
 } from './db/connection.js';
 import {
