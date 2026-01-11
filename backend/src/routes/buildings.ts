@@ -5,12 +5,9 @@
  */
 
 import { FastifyInstance } from 'fastify';
-import { z } from 'zod';
 import { query } from '../db/connection.js';
 import { getBuildingWithAddress, assignCommunityAddress } from '../services/address.js';
-
-/** Schema for validating bbox query parameter format */
-const bboxSchema = z.string().regex(/^-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*$/);
+import { parseBbox, MAX_BBOX_RESULTS } from '../utils/validation.js';
 
 /**
  * Query parameters for the buildings endpoint.
@@ -56,6 +53,14 @@ export async function buildingsRoutes(fastify: FastifyInstance) {
    */
   fastify.get<{ Querystring: BboxQuery }>(
     '/buildings',
+    {
+      config: {
+        rateLimit: {
+          max: 30,
+          timeWindow: '1 minute',
+        },
+      },
+    },
     async (request, reply) => {
       const { bbox, include_official = 'true' } = request.query;
 
@@ -63,12 +68,12 @@ export async function buildingsRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'bbox parameter is required' });
       }
 
-      const parsed = bboxSchema.safeParse(bbox);
-      if (!parsed.success) {
-        return reply.status(400).send({ error: 'Invalid bbox format. Use: minLon,minLat,maxLon,maxLat' });
+      const parsed = parseBbox(bbox);
+      if (!parsed.valid) {
+        return reply.status(400).send({ error: parsed.error });
       }
 
-      const [minLon, minLat, maxLon, maxLat] = bbox.split(',').map(Number);
+      const { minLon, minLat, maxLon, maxLat } = parsed;
 
       interface BuildingRow {
         id: number;
@@ -93,8 +98,9 @@ export async function buildingsRoutes(fastify: FastifyInstance) {
           addr_city
         FROM buildings
         WHERE geometry && ST_MakeEnvelope($1, $2, $3, $4, 4326)
-        ${include_official === 'false' ? 'AND addr_housenumber IS NULL' : ''}`,
-        [minLon, minLat, maxLon, maxLat]
+        ${include_official === 'false' ? 'AND addr_housenumber IS NULL' : ''}
+        LIMIT $5`,
+        [minLon, minLat, maxLon, maxLat, MAX_BBOX_RESULTS]
       );
 
       const features = await Promise.all(
@@ -159,6 +165,8 @@ export async function buildingsRoutes(fastify: FastifyInstance) {
         metadata: {
           bbox: [minLon, minLat, maxLon, maxLat],
           total: features.length,
+          truncated: features.length >= MAX_BBOX_RESULTS,
+          limit: MAX_BBOX_RESULTS,
           generated_at: new Date().toISOString(),
         },
       };

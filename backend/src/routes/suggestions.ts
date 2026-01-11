@@ -69,7 +69,17 @@ export async function suggestionsRoutes(fastify: FastifyInstance) {
    * @returns {Object} Confirmation with suggestion ID and status
    * @throws {400} Invalid request body
    */
-  fastify.post<{ Body: SuggestionBody }>('/suggestions', async (request, reply) => {
+  fastify.post<{ Body: SuggestionBody }>(
+    '/suggestions',
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: '1 minute',
+        },
+      },
+    },
+    async (request, reply) => {
     const parsed = suggestionSchema.safeParse(request.body);
 
     if (!parsed.success) {
