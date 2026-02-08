@@ -338,7 +338,7 @@ The frontend is a Progressive Web App (PWA) with:
 
 ## License
 
-MIT
+Licensed under the [Christian Open Source License (COSL) v1.0](LICENSE.md).
 
 ## Contributing
 
